@@ -6,6 +6,8 @@ const CLIENT_ID = '595852680736-bde0rog3cine1u63lh1k3q53u1l5orlv.apps.googleuser
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 const BATCH_SIZE = 50;
 const STORAGE_KEY = 'yt_playlist_cache';
+const AUTH_STORAGE_KEY = 'yt_auth_token';
+const SECONDS_TO_MILLISECONDS = 1000;
 
 let accessToken = null;
 let tokenClient = null;
@@ -19,6 +21,16 @@ function initializeGoogleAuth() {
     });
 }
 
+// Validate auth data structure
+function isValidAuthData(authData) {
+    return authData && 
+           typeof authData === 'object' && 
+           typeof authData.access_token === 'string' &&
+           authData.access_token.length > 0 &&
+           typeof authData.expires_at === 'number' &&
+           authData.expires_at > 0;
+}
+
 // Handle authentication response
 function handleAuthResponse(response) {
     if (response.error !== undefined) {
@@ -26,7 +38,27 @@ function handleAuthResponse(response) {
         return;
     }
     
+    // Validate expires_in
+    if (!response.expires_in || response.expires_in <= 0) {
+        showError('Réponse d\'authentification invalide');
+        return;
+    }
+    
     accessToken = response.access_token;
+    
+    // Save to localStorage with expiration timestamp
+    try {
+        const expiresAt = Date.now() + (response.expires_in * SECONDS_TO_MILLISECONDS);
+        const authData = {
+            access_token: response.access_token,
+            expires_in: response.expires_in,
+            expires_at: expiresAt
+        };
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
+    } catch (error) {
+        console.error('Error saving auth token to localStorage:', error);
+    }
+    
     updateAuthUI(true);
     loadSubscriptions();
 }
@@ -46,6 +78,44 @@ function requestAccessToken() {
     }
 }
 
+// Restore session from localStorage
+function restoreSession() {
+    try {
+        const authDataStr = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (!authDataStr) {
+            return; // No saved session
+        }
+        
+        const authData = JSON.parse(authDataStr);
+        
+        // Validate authData structure
+        if (!isValidAuthData(authData)) {
+            // Invalid data structure, clean up
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            return;
+        }
+        
+        const now = Date.now();
+        
+        // Check if token is still valid
+        if (now < authData.expires_at) {
+            // Token is still valid, restore session
+            accessToken = authData.access_token;
+            updateAuthUI(true);
+            loadSubscriptions();
+        } else {
+            // Token is expired, clean up
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            accessToken = null;
+        }
+    } catch (error) {
+        console.error('Error restoring session:', error);
+        // Clean up on error
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        accessToken = null;
+    }
+}
+
 // Sign out
 function signOut() {
     if (accessToken) {
@@ -53,6 +123,10 @@ function signOut() {
             console.log('Access token revoked');
         });
         accessToken = null;
+        
+        // Remove from localStorage
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        
         updateAuthUI(false);
         clearUI();
     }
@@ -340,6 +414,9 @@ function initApp() {
     // Wait for Google Identity Services to load
     if (typeof google !== 'undefined' && google.accounts) {
         initializeGoogleAuth();
+        
+        // Try to restore session from localStorage
+        restoreSession();
     } else {
         setTimeout(initApp, 100);
     }
