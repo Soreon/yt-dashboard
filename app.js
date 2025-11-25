@@ -615,7 +615,8 @@ function createVideoCard(video) {
     const title = video.snippet?.title || 'Sans titre';
     const channelTitle = video.snippet?.channelTitle || 'Chaîne inconnue';
     const publishedAt = video.snippet?.publishedAt;
-    const thumbnail = video.snippet?.thumbnails?.medium?.url || 
+    const thumbnail = video.snippet?.thumbnails?.high?.url || // Use High quality if available for big cards
+                      video.snippet?.thumbnails?.medium?.url || 
                       video.snippet?.thumbnails?.default?.url || '';
     
     const card = document.createElement('div');
@@ -627,12 +628,17 @@ function createVideoCard(video) {
         };
     }
     
+    // Structure modifiée pour le nouveau CSS
     card.innerHTML = `
         <img class="video-thumbnail" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(title)}" loading="lazy">
         <div class="video-info">
             <div class="video-title">${escapeHtml(title)}</div>
-            <div class="video-channel">${escapeHtml(channelTitle)}</div>
-            <div class="video-date">${getRelativeTime(publishedAt)}</div>
+            <div class="video-meta-row">
+                <div class="video-channel">
+                    <span>${escapeHtml(channelTitle)}</span>
+                </div>
+                <div class="video-date">${getRelativeTime(publishedAt)}</div>
+            </div>
         </div>
     `;
     
