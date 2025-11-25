@@ -70,10 +70,19 @@ function restoreSession() {
         }
         
         const authData = JSON.parse(authDataStr);
+        
+        // Validate authData structure
+        if (!authData || typeof authData !== 'object' || 
+            !authData.access_token || !authData.expires_at) {
+            // Invalid data structure, clean up
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            return;
+        }
+        
         const now = Date.now();
         
         // Check if token is still valid
-        if (authData.expires_at && now < authData.expires_at) {
+        if (now < authData.expires_at) {
             // Token is still valid, restore session
             accessToken = authData.access_token;
             updateAuthUI(true);
