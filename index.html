@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>YouTube Dashboard</h1>
+            <div id="auth-container">
+                <div id="g_id_onload"
+                     data-client_id="YOUR_CLIENT_ID.apps.googleusercontent.com"
+                     data-callback="handleCredentialResponse"
+                     data-auto_prompt="false">
+                </div>
+                <div class="g_id_signin" 
+                     data-type="standard"
+                     data-size="large"
+                     data-theme="outline"
+                     data-text="sign_in_with"
+                     data-shape="rectangular"
+                     data-logo_alignment="left">
+                </div>
+                <button id="signout-button" style="display: none;">Se déconnecter</button>
+            </div>
+        </header>
+
+        <div id="error-message" class="error-message" style="display: none;"></div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Chargement des abonnements...</p>
+        </div>
+
+        <div id="stats" class="stats" style="display: none;">
+            <div class="stat-item">
+                <span class="stat-label">Abonnements:</span>
+                <span id="sub-count" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Cache localStorage:</span>
+                <span id="cache-count" class="stat-value">0</span>
+            </div>
+        </div>
+
+        <div id="subscriptions-grid" class="subscriptions-grid"></div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+</body>
+</html>
