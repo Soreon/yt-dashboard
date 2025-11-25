@@ -530,8 +530,12 @@ async function fetchPlaylistVideos(playlistId) {
 
 // Format relative time
 function getRelativeTime(dateString) {
-    const now = Date.now();
+    if (!dateString) return 'Date inconnue';
+    
     const published = new Date(dateString).getTime();
+    if (isNaN(published)) return 'Date invalide';
+    
+    const now = Date.now();
     const diff = now - published;
     
     const seconds = Math.floor(diff / 1000);
@@ -729,19 +733,22 @@ async function loadSubscriptions() {
         
         // Update statistics
         const videoCache = getVideoCache();
-        const videoCount = Object.values(videoCache).reduce((sum, videos) => sum + videos.length, 0);
+        let videoCount = 0;
+        for (const channelId in videoCache) {
+            videoCount += (videoCache[channelId] || []).length;
+        }
         updateStats(subscriptions.length, videoCount);
         
         // Initialize filter buttons
         renderFilterButtons();
         
-        // Trigger smart sync (non-blocking)
-        setLoading(false);
-        syncAllChannels(false);
-        
     } catch (error) {
         showError(`Erreur: ${error.message}`);
+    } finally {
         setLoading(false);
+        
+        // Trigger smart sync in background (non-blocking)
+        syncAllChannels(false);
     }
 }
 
