@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Dashboard</title>
+    <title>Global Video Feed</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>YouTube Dashboard</h1>
+            <h1>Global Video Feed</h1>
             <div id="auth-container">
+                <button id="force-sync-button" class="secondary-button" style="display: none;">Forcer la synchro</button>
+                <button id="manage-groups-button" class="secondary-button" style="display: none;">Gérer les groupes</button>
                 <button id="authorize-button">Se connecter à YouTube</button>
                 <button id="signout-button" style="display: none;">Se déconnecter</button>
             </div>
@@ -30,12 +32,39 @@
                 <span id="sub-count" class="stat-value">0</span>
             </div>
             <div class="stat-item">
-                <span class="stat-label">Cache localStorage:</span>
-                <span id="cache-count" class="stat-value">0</span>
+                <span class="stat-label">Vidéos:</span>
+                <span id="video-count" class="stat-value">0</span>
             </div>
         </div>
 
+        <div id="filters-bar" class="filters-bar" style="display: none;">
+            <div id="filter-buttons" class="filter-buttons"></div>
+        </div>
+
         <div id="subscriptions-grid" class="subscriptions-grid"></div>
+    </div>
+
+    <!-- Groups Management Modal -->
+    <div id="groups-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Gérer les groupes</h2>
+                <button id="close-modal" class="close-button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="group-name">Nom du groupe:</label>
+                    <input type="text" id="group-name" placeholder="Ex: Tech, Music, Gaming...">
+                </div>
+                <div class="form-group">
+                    <label>Sélectionner les chaînes:</label>
+                    <div id="channel-list" class="channel-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-group" class="primary-button">Créer le groupe</button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js" type="module"></script>

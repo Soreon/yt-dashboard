@@ -7,7 +7,13 @@ const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 const BATCH_SIZE = 50;
 const STORAGE_KEY = 'yt_playlist_cache';
 const AUTH_STORAGE_KEY = 'yt_auth_token';
+const VIDEO_CACHE_KEY = 'yt_video_cache';
+const LAST_SYNC_KEY = 'yt_last_sync';
+const USER_GROUPS_KEY = 'yt_user_groups';
+const CHANNEL_NAMES_KEY = 'yt_channel_names';
 const SECONDS_TO_MILLISECONDS = 1000;
+const ONE_HOUR_MS = 3600000;
+const MAX_VIDEOS_PER_CHANNEL = 10;
 
 let accessToken = null;
 let tokenClient = null;
@@ -136,6 +142,9 @@ function signOut() {
 function updateAuthUI(isAuthenticated) {
     const authButton = document.getElementById('authorize-button');
     const signOutButton = document.getElementById('signout-button');
+    const forceSyncButton = document.getElementById('force-sync-button');
+    const manageGroupsButton = document.getElementById('manage-groups-button');
+    const filtersBar = document.getElementById('filters-bar');
     
     if (authButton) {
         // Si connecté, on cache le bouton de connexion, sinon on l'affiche
@@ -144,6 +153,15 @@ function updateAuthUI(isAuthenticated) {
     if (signOutButton) {
         // Inversement pour le bouton de déconnexion
         signOutButton.style.display = isAuthenticated ? 'inline-block' : 'none';
+    }
+    if (forceSyncButton) {
+        forceSyncButton.style.display = isAuthenticated ? 'inline-block' : 'none';
+    }
+    if (manageGroupsButton) {
+        manageGroupsButton.style.display = isAuthenticated ? 'inline-block' : 'none';
+    }
+    if (filtersBar) {
+        filtersBar.style.display = isAuthenticated ? 'block' : 'none';
     }
 }
 
@@ -241,6 +259,86 @@ function savePlaylistCache(cache) {
     }
 }
 
+// Get video cache from localStorage
+function getVideoCache() {
+    try {
+        const cache = localStorage.getItem(VIDEO_CACHE_KEY);
+        return cache ? JSON.parse(cache) : {};
+    } catch (error) {
+        console.error('Error reading video cache:', error);
+        return {};
+    }
+}
+
+// Save video cache to localStorage
+function saveVideoCache(cache) {
+    try {
+        localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+        console.error('Error saving video cache:', error);
+    }
+}
+
+// Get last sync timestamp
+function getLastSync() {
+    try {
+        const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+        return lastSync ? parseInt(lastSync, 10) : 0;
+    } catch (error) {
+        console.error('Error reading last sync:', error);
+        return 0;
+    }
+}
+
+// Save last sync timestamp
+function saveLastSync(timestamp) {
+    try {
+        localStorage.setItem(LAST_SYNC_KEY, timestamp.toString());
+    } catch (error) {
+        console.error('Error saving last sync:', error);
+    }
+}
+
+// Get user groups from localStorage
+function getUserGroups() {
+    try {
+        const groups = localStorage.getItem(USER_GROUPS_KEY);
+        return groups ? JSON.parse(groups) : {};
+    } catch (error) {
+        console.error('Error reading user groups:', error);
+        return {};
+    }
+}
+
+// Save user groups to localStorage
+function saveUserGroups(groups) {
+    try {
+        localStorage.setItem(USER_GROUPS_KEY, JSON.stringify(groups));
+    } catch (error) {
+        console.error('Error saving user groups:', error);
+    }
+}
+
+// Get channel names from localStorage
+function getChannelNames() {
+    try {
+        const names = localStorage.getItem(CHANNEL_NAMES_KEY);
+        return names ? JSON.parse(names) : {};
+    } catch (error) {
+        console.error('Error reading channel names:', error);
+        return {};
+    }
+}
+
+// Save channel names to localStorage
+function saveChannelNames(names) {
+    try {
+        localStorage.setItem(CHANNEL_NAMES_KEY, JSON.stringify(names));
+    } catch (error) {
+        console.error('Error saving channel names:', error);
+    }
+}
+
 // Batch fetch channel details to get uploads playlist IDs
 async function fetchChannelDetails(channelIds) {
     const cache = getPlaylistCache();
@@ -307,6 +405,240 @@ function isValidYouTubeId(id) {
     return id && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
+// Smart Sync: Fetch videos from all channels
+async function syncAllChannels(force = false) {
+    // Check if sync is needed
+    const lastSync = getLastSync();
+    const now = Date.now();
+    
+    if (!force && (now - lastSync) < ONE_HOUR_MS) {
+        console.log('Sync skipped: last sync was less than 1 hour ago');
+        return;
+    }
+    
+    // Get playlist cache
+    const playlistCache = getPlaylistCache();
+    const playlistIds = Object.values(playlistCache);
+    
+    if (playlistIds.length === 0) {
+        console.log('No playlists to sync');
+        return;
+    }
+    
+    // Show sync indicator
+    const loadingEl = document.getElementById('loading');
+    const loadingText = loadingEl?.querySelector('p');
+    if (loadingText) {
+        loadingText.textContent = 'Mise à jour du flux...';
+    }
+    setLoading(true);
+    
+    try {
+        // Fetch videos from all playlists in parallel
+        const videoPromises = playlistIds.map(playlistId => 
+            fetchPlaylistVideos(playlistId)
+        );
+        
+        const results = await Promise.all(videoPromises);
+        
+        // Get current video cache
+        const videoCache = getVideoCache();
+        
+        // Merge results into cache
+        results.forEach((videos, index) => {
+            if (!videos || videos.length === 0) return;
+            
+            // Find the channel ID for this playlist
+            const channelId = Object.keys(playlistCache).find(
+                key => playlistCache[key] === playlistIds[index]
+            );
+            
+            if (!channelId) return;
+            
+            // Get existing videos for this channel
+            const existingVideos = videoCache[channelId] || [];
+            const existingVideoIds = new Set(
+                existingVideos.map(v => v.snippet?.resourceId?.videoId)
+            );
+            
+            // Add new videos
+            const newVideos = videos.filter(
+                v => !existingVideoIds.has(v.snippet?.resourceId?.videoId)
+            );
+            
+            // Combine and keep max 10 videos
+            const combined = [...newVideos, ...existingVideos];
+            videoCache[channelId] = combined.slice(0, MAX_VIDEOS_PER_CHANNEL);
+        });
+        
+        // Save updated cache and timestamp
+        saveVideoCache(videoCache);
+        saveLastSync(now);
+        
+        console.log('Sync completed successfully');
+        
+        // Reload the video feed
+        renderVideoFeed();
+        
+        // Update filter buttons in case videos changed
+        renderFilterButtons();
+        
+    } catch (error) {
+        console.error('Error during sync:', error);
+        showError('Erreur lors de la synchronisation des vidéos');
+    } finally {
+        setLoading(false);
+        if (loadingText) {
+            loadingText.textContent = 'Chargement des abonnements...';
+        }
+    }
+}
+
+// Fetch videos from a single playlist
+async function fetchPlaylistVideos(playlistId) {
+    try {
+        const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+        url.searchParams.append('part', 'snippet');
+        url.searchParams.append('playlistId', playlistId);
+        url.searchParams.append('maxResults', '5');
+        url.searchParams.append('key', API_KEY);
+        
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+        
+        if (response.status === 401) {
+            // Token expired, will be handled by main flow
+            return [];
+        }
+        
+        if (!response.ok) {
+            console.error(`Error fetching playlist ${playlistId}: ${response.status}`);
+            return [];
+        }
+        
+        const data = await response.json();
+        return data.items || [];
+        
+    } catch (error) {
+        console.error(`Error fetching playlist ${playlistId}:`, error);
+        return [];
+    }
+}
+
+// Format relative time
+function getRelativeTime(dateString) {
+    if (!dateString) return 'Date inconnue';
+    
+    const published = new Date(dateString).getTime();
+    if (isNaN(published)) return 'Date invalide';
+    
+    const now = Date.now();
+    const diff = now - published;
+    
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const months = Math.floor(days / 30);
+    const years = Math.floor(days / 365);
+    
+    if (years > 0) return `il y a ${years} an${years > 1 ? 's' : ''}`;
+    if (months > 0) return `il y a ${months} mois`;
+    if (days > 0) return `il y a ${days} jour${days > 1 ? 's' : ''}`;
+    if (hours > 0) return `il y a ${hours}h`;
+    if (minutes > 0) return `il y a ${minutes}min`;
+    return 'à l\'instant';
+}
+
+// Render video feed
+function renderVideoFeed(filterGroup = null) {
+    const videoCache = getVideoCache();
+    const playlistCache = getPlaylistCache();
+    
+    // Flatten all videos with channel info
+    const allVideos = [];
+    
+    Object.keys(videoCache).forEach(channelId => {
+        const videos = videoCache[channelId] || [];
+        videos.forEach(video => {
+            allVideos.push({
+                ...video,
+                channelId: channelId
+            });
+        });
+    });
+    
+    // Filter by group if specified
+    let filteredVideos = allVideos;
+    if (filterGroup) {
+        const groups = getUserGroups();
+        const channelIds = groups[filterGroup] || [];
+        filteredVideos = allVideos.filter(v => channelIds.includes(v.channelId));
+    }
+    
+    // Sort by published date (descending)
+    filteredVideos.sort((a, b) => {
+        const dateA = new Date(a.snippet?.publishedAt || 0).getTime();
+        const dateB = new Date(b.snippet?.publishedAt || 0).getTime();
+        return dateB - dateA;
+    });
+    
+    // Render videos
+    const grid = document.getElementById('subscriptions-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '';
+    
+    if (filteredVideos.length === 0) {
+        grid.innerHTML = '<div class="no-videos">Aucune vidéo disponible. Cliquez sur "Forcer la synchro" pour récupérer les dernières vidéos.</div>';
+        return;
+    }
+    
+    filteredVideos.forEach(video => {
+        const card = createVideoCard(video);
+        grid.appendChild(card);
+    });
+    
+    // Update stats
+    const statsEl = document.getElementById('stats');
+    const videoCountEl = document.getElementById('video-count');
+    if (statsEl) statsEl.style.display = 'flex';
+    if (videoCountEl) videoCountEl.textContent = filteredVideos.length;
+}
+
+// Create video card element
+function createVideoCard(video) {
+    const videoId = video.snippet?.resourceId?.videoId;
+    const title = video.snippet?.title || 'Sans titre';
+    const channelTitle = video.snippet?.channelTitle || 'Chaîne inconnue';
+    const publishedAt = video.snippet?.publishedAt;
+    const thumbnail = video.snippet?.thumbnails?.medium?.url || 
+                      video.snippet?.thumbnails?.default?.url || '';
+    
+    const card = document.createElement('div');
+    card.className = 'video-card';
+    
+    if (videoId && isValidYouTubeId(videoId)) {
+        card.onclick = () => {
+            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+        };
+    }
+    
+    card.innerHTML = `
+        <img class="video-thumbnail" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(title)}" loading="lazy">
+        <div class="video-info">
+            <div class="video-title">${escapeHtml(title)}</div>
+            <div class="video-channel">${escapeHtml(channelTitle)}</div>
+            <div class="video-date">${getRelativeTime(publishedAt)}</div>
+        </div>
+    `;
+    
+    return card;
+}
+
 // Create channel card element
 function createChannelCard(subscription, playlistCache) {
     const channelId = subscription.snippet.resourceId.channelId;
@@ -354,14 +686,14 @@ function escapeHtml(text) {
 }
 
 // Update statistics display
-function updateStats(subscriptionCount, cacheCount) {
+function updateStats(subscriptionCount, videoCount) {
     const statsEl = document.getElementById('stats');
     const subCountEl = document.getElementById('sub-count');
-    const cacheCountEl = document.getElementById('cache-count');
+    const videoCountEl = document.getElementById('video-count');
     
     if (statsEl) statsEl.style.display = 'flex';
     if (subCountEl) subCountEl.textContent = subscriptionCount;
-    if (cacheCountEl) cacheCountEl.textContent = cacheCount;
+    if (videoCountEl) videoCountEl.textContent = videoCount;
 }
 
 // Load and display subscriptions
@@ -370,6 +702,9 @@ async function loadSubscriptions() {
     clearUI();
     
     try {
+        // First, load videos from cache immediately
+        renderVideoFeed();
+        
         // Fetch all subscriptions
         const subscriptions = await fetchAllSubscriptions();
         
@@ -384,28 +719,36 @@ async function loadSubscriptions() {
             return;
         }
         
-        // Extract channel IDs
+        // Extract channel IDs and save channel names
         const channelIds = subscriptions.map(sub => sub.snippet.resourceId.channelId);
+        const channelNames = {};
+        subscriptions.forEach(sub => {
+            const channelId = sub.snippet.resourceId.channelId;
+            channelNames[channelId] = sub.snippet.title;
+        });
+        saveChannelNames(channelNames);
         
         // Fetch channel details in batches
         const playlistCache = await fetchChannelDetails(channelIds);
         
-        // Display subscriptions
-        const grid = document.getElementById('subscriptions-grid');
-        if (grid) {
-            subscriptions.forEach(subscription => {
-                const card = createChannelCard(subscription, playlistCache);
-                grid.appendChild(card);
-            });
-        }
-        
         // Update statistics
-        updateStats(subscriptions.length, Object.keys(playlistCache).length);
+        const videoCache = getVideoCache();
+        let videoCount = 0;
+        for (const channelId in videoCache) {
+            videoCount += (videoCache[channelId] || []).length;
+        }
+        updateStats(subscriptions.length, videoCount);
+        
+        // Initialize filter buttons
+        renderFilterButtons();
         
     } catch (error) {
         showError(`Erreur: ${error.message}`);
     } finally {
         setLoading(false);
+        
+        // Trigger smart sync in background (non-blocking)
+        syncAllChannels(false);
     }
 }
 
@@ -434,6 +777,167 @@ function initApp() {
             requestAccessToken();
         });
     }
+    
+    // Setup force sync button
+    const forceSyncButton = document.getElementById('force-sync-button');
+    if (forceSyncButton) {
+        forceSyncButton.addEventListener('click', () => {
+            syncAllChannels(true);
+        });
+    }
+    
+    // Setup manage groups button
+    const manageGroupsButton = document.getElementById('manage-groups-button');
+    if (manageGroupsButton) {
+        manageGroupsButton.addEventListener('click', openGroupsModal);
+    }
+    
+    // Setup close modal button
+    const closeModalButton = document.getElementById('close-modal');
+    if (closeModalButton) {
+        closeModalButton.addEventListener('click', closeGroupsModal);
+    }
+    
+    // Setup save group button
+    const saveGroupButton = document.getElementById('save-group');
+    if (saveGroupButton) {
+        saveGroupButton.addEventListener('click', saveNewGroup);
+    }
+}
+
+// Render filter buttons
+function renderFilterButtons() {
+    const filterContainer = document.getElementById('filter-buttons');
+    if (!filterContainer) return;
+    
+    filterContainer.innerHTML = '';
+    
+    // "All" button
+    const allButton = document.createElement('button');
+    allButton.className = 'filter-button active';
+    allButton.textContent = 'Tous';
+    allButton.onclick = () => {
+        setActiveFilter(allButton);
+        renderVideoFeed(null);
+    };
+    filterContainer.appendChild(allButton);
+    
+    // Group buttons
+    const groups = getUserGroups();
+    Object.keys(groups).forEach(groupName => {
+        const button = document.createElement('button');
+        button.className = 'filter-button';
+        button.textContent = groupName;
+        button.onclick = () => {
+            setActiveFilter(button);
+            renderVideoFeed(groupName);
+        };
+        filterContainer.appendChild(button);
+    });
+}
+
+// Set active filter button
+function setActiveFilter(activeButton) {
+    const buttons = document.querySelectorAll('.filter-button');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    activeButton.classList.add('active');
+}
+
+// Open groups modal
+function openGroupsModal() {
+    const modal = document.getElementById('groups-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        populateChannelList();
+    }
+}
+
+// Close groups modal
+function closeGroupsModal() {
+    const modal = document.getElementById('groups-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Populate channel list in modal
+function populateChannelList() {
+    const channelListEl = document.getElementById('channel-list');
+    if (!channelListEl) return;
+    
+    channelListEl.innerHTML = '';
+    
+    const playlistCache = getPlaylistCache();
+    const channelNames = getChannelNames();
+    const channelIds = Object.keys(playlistCache);
+    
+    if (channelIds.length === 0) {
+        channelListEl.innerHTML = '<p class="no-channels">Aucune chaîne disponible</p>';
+        return;
+    }
+    
+    // Sort by channel name
+    channelIds.sort((a, b) => {
+        const nameA = channelNames[a] || a;
+        const nameB = channelNames[b] || b;
+        return nameA.localeCompare(nameB);
+    });
+    
+    channelIds.forEach(channelId => {
+        const label = document.createElement('label');
+        label.className = 'channel-checkbox';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = channelId;
+        checkbox.dataset.channelId = channelId;
+        
+        const span = document.createElement('span');
+        span.textContent = channelNames[channelId] || channelId;
+        
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        channelListEl.appendChild(label);
+    });
+}
+
+// Save new group
+function saveNewGroup() {
+    const groupNameInput = document.getElementById('group-name');
+    const channelCheckboxes = document.querySelectorAll('#channel-list input[type="checkbox"]:checked');
+    
+    if (!groupNameInput) return;
+    
+    const groupName = groupNameInput.value.trim();
+    
+    if (!groupName) {
+        showError('Veuillez entrer un nom de groupe');
+        return;
+    }
+    
+    const selectedChannels = Array.from(channelCheckboxes).map(cb => cb.value);
+    
+    if (selectedChannels.length === 0) {
+        showError('Veuillez sélectionner au moins une chaîne');
+        return;
+    }
+    
+    // Save group
+    const groups = getUserGroups();
+    groups[groupName] = selectedChannels;
+    saveUserGroups(groups);
+    
+    // Reset form
+    groupNameInput.value = '';
+    channelCheckboxes.forEach(cb => cb.checked = false);
+    
+    // Update filter buttons
+    renderFilterButtons();
+    
+    // Close modal
+    closeGroupsModal();
+    
+    console.log(`Group "${groupName}" created with ${selectedChannels.length} channels`);
 }
 
 // Start the application when DOM is ready
