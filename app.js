@@ -262,9 +262,9 @@ function createChannelCard(subscription, playlistCache) {
     const description = subscription.snippet.description || '';
     
     card.innerHTML = `
-        <img class="channel-thumbnail" src="${thumbnail}" alt="${title}" loading="lazy">
+        <img class="channel-thumbnail" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(title)}" loading="lazy">
         <div class="channel-info">
-            <img class="channel-avatar" src="${avatar}" alt="${title}" loading="lazy">
+            <img class="channel-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(title)}" loading="lazy">
             <div class="channel-details">
                 <div class="channel-title">${escapeHtml(title)}</div>
             </div>
