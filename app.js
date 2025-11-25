@@ -10,6 +10,7 @@ const AUTH_STORAGE_KEY = 'yt_auth_token';
 const VIDEO_CACHE_KEY = 'yt_video_cache';
 const LAST_SYNC_KEY = 'yt_last_sync';
 const USER_GROUPS_KEY = 'yt_user_groups';
+const CHANNEL_NAMES_KEY = 'yt_channel_names';
 const SECONDS_TO_MILLISECONDS = 1000;
 const ONE_HOUR_MS = 3600000;
 const MAX_VIDEOS_PER_CHANNEL = 10;
@@ -318,6 +319,26 @@ function saveUserGroups(groups) {
     }
 }
 
+// Get channel names from localStorage
+function getChannelNames() {
+    try {
+        const names = localStorage.getItem(CHANNEL_NAMES_KEY);
+        return names ? JSON.parse(names) : {};
+    } catch (error) {
+        console.error('Error reading channel names:', error);
+        return {};
+    }
+}
+
+// Save channel names to localStorage
+function saveChannelNames(names) {
+    try {
+        localStorage.setItem(CHANNEL_NAMES_KEY, JSON.stringify(names));
+    } catch (error) {
+        console.error('Error saving channel names:', error);
+    }
+}
+
 // Batch fetch channel details to get uploads playlist IDs
 async function fetchChannelDetails(channelIds) {
     const cache = getPlaylistCache();
@@ -458,6 +479,9 @@ async function syncAllChannels(force = false) {
         
         // Reload the video feed
         renderVideoFeed();
+        
+        // Update filter buttons in case videos changed
+        renderFilterButtons();
         
     } catch (error) {
         console.error('Error during sync:', error);
@@ -691,8 +715,14 @@ async function loadSubscriptions() {
             return;
         }
         
-        // Extract channel IDs
+        // Extract channel IDs and save channel names
         const channelIds = subscriptions.map(sub => sub.snippet.resourceId.channelId);
+        const channelNames = {};
+        subscriptions.forEach(sub => {
+            const channelId = sub.snippet.resourceId.channelId;
+            channelNames[channelId] = sub.snippet.title;
+        });
+        saveChannelNames(channelNames);
         
         // Fetch channel details in batches
         const playlistCache = await fetchChannelDetails(channelIds);
@@ -701,6 +731,9 @@ async function loadSubscriptions() {
         const videoCache = getVideoCache();
         const videoCount = Object.values(videoCache).reduce((sum, videos) => sum + videos.length, 0);
         updateStats(subscriptions.length, videoCount);
+        
+        // Initialize filter buttons
+        renderFilterButtons();
         
         // Trigger smart sync (non-blocking)
         setLoading(false);
@@ -763,9 +796,6 @@ function initApp() {
     if (saveGroupButton) {
         saveGroupButton.addEventListener('click', saveNewGroup);
     }
-    
-    // Initialize filter buttons
-    renderFilterButtons();
 }
 
 // Render filter buttons
@@ -831,6 +861,7 @@ function populateChannelList() {
     channelListEl.innerHTML = '';
     
     const playlistCache = getPlaylistCache();
+    const channelNames = getChannelNames();
     const channelIds = Object.keys(playlistCache);
     
     if (channelIds.length === 0) {
@@ -838,8 +869,13 @@ function populateChannelList() {
         return;
     }
     
-    // We need to fetch subscription data to get channel names
-    // For now, use channel IDs
+    // Sort by channel name
+    channelIds.sort((a, b) => {
+        const nameA = channelNames[a] || a;
+        const nameB = channelNames[b] || b;
+        return nameA.localeCompare(nameB);
+    });
+    
     channelIds.forEach(channelId => {
         const label = document.createElement('label');
         label.className = 'channel-checkbox';
@@ -850,7 +886,7 @@ function populateChannelList() {
         checkbox.dataset.channelId = channelId;
         
         const span = document.createElement('span');
-        span.textContent = channelId; // TODO: Use channel name
+        span.textContent = channelNames[channelId] || channelId;
         
         label.appendChild(checkbox);
         label.appendChild(span);
