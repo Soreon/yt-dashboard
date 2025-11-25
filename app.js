@@ -25,14 +25,22 @@ function initializeGoogleAuth() {
 function isValidAuthData(authData) {
     return authData && 
            typeof authData === 'object' && 
-           authData.access_token && 
-           authData.expires_at;
+           typeof authData.access_token === 'string' &&
+           authData.access_token.length > 0 &&
+           typeof authData.expires_at === 'number' &&
+           authData.expires_at > 0;
 }
 
 // Handle authentication response
 function handleAuthResponse(response) {
     if (response.error !== undefined) {
         showError(`Erreur d'authentification: ${response.error}`);
+        return;
+    }
+    
+    // Validate expires_in
+    if (!response.expires_in || response.expires_in <= 0) {
+        showError('Réponse d\'authentification invalide');
         return;
     }
     
