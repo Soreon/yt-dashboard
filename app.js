@@ -7,6 +7,7 @@ const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 const BATCH_SIZE = 50;
 const STORAGE_KEY = 'yt_playlist_cache';
 const AUTH_STORAGE_KEY = 'yt_auth_token';
+const SECONDS_TO_MILLISECONDS = 1000;
 
 let accessToken = null;
 let tokenClient = null;
@@ -20,6 +21,14 @@ function initializeGoogleAuth() {
     });
 }
 
+// Validate auth data structure
+function isValidAuthData(authData) {
+    return authData && 
+           typeof authData === 'object' && 
+           authData.access_token && 
+           authData.expires_at;
+}
+
 // Handle authentication response
 function handleAuthResponse(response) {
     if (response.error !== undefined) {
@@ -31,7 +40,7 @@ function handleAuthResponse(response) {
     
     // Save to localStorage with expiration timestamp
     try {
-        const expiresAt = Date.now() + (response.expires_in * 1000);
+        const expiresAt = Date.now() + (response.expires_in * SECONDS_TO_MILLISECONDS);
         const authData = {
             access_token: response.access_token,
             expires_in: response.expires_in,
@@ -72,8 +81,7 @@ function restoreSession() {
         const authData = JSON.parse(authDataStr);
         
         // Validate authData structure
-        if (!authData || typeof authData !== 'object' || 
-            !authData.access_token || !authData.expires_at) {
+        if (!isValidAuthData(authData)) {
             // Invalid data structure, clean up
             localStorage.removeItem(AUTH_STORAGE_KEY);
             return;
