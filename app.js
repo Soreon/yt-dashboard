@@ -60,14 +60,16 @@ function signOut() {
 
 // Update authentication UI
 function updateAuthUI(isAuthenticated) {
-    const signInButton = document.querySelector('.g_id_signin');
+    const authButton = document.getElementById('authorize-button');
     const signOutButton = document.getElementById('signout-button');
     
-    if (signInButton) {
-        signInButton.style.display = isAuthenticated ? 'none' : 'block';
+    if (authButton) {
+        // Si connecté, on cache le bouton de connexion, sinon on l'affiche
+        authButton.style.display = isAuthenticated ? 'none' : 'inline-block';
     }
     if (signOutButton) {
-        signOutButton.style.display = isAuthenticated ? 'block' : 'none';
+        // Inversement pour le bouton de déconnexion
+        signOutButton.style.display = isAuthenticated ? 'inline-block' : 'none';
     }
 }
 
