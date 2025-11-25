@@ -349,12 +349,10 @@ function initApp() {
     }
     
     // Setup sign in button click handler
-    const signInContainer = document.querySelector('.g_id_signin');
-    if (signInContainer) {
-        signInContainer.addEventListener('click', () => {
-            if (!accessToken) {
-                requestAccessToken();
-            }
+    const authButton = document.getElementById('authorize-button');
+    if (authButton) {
+        authButton.addEventListener('click', () => {
+            requestAccessToken();
         });
     }
 }
