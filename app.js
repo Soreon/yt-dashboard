@@ -1,8 +1,8 @@
 // YouTube Dashboard Application
 // Google Identity Services (Token Model) - No backend secret required
 
-const API_KEY = 'YOUR_API_KEY'; // Replace with your YouTube Data API key
-const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com'; // Replace with your OAuth Client ID
+const API_KEY = 'AIzaSyBjfBblUeW8XnRVLIQA1oK-btKUVXh0hOQ'; // Replace with your YouTube Data API key
+const CLIENT_ID = '595852680736-bde0rog3cine1u63lh1k3q53u1l5orlv.apps.googleusercontent.com'; // Replace with your OAuth Client ID
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 const BATCH_SIZE = 50;
 const STORAGE_KEY = 'yt_playlist_cache';
