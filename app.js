@@ -226,17 +226,9 @@ async function fetchChannelDetails(channelIds) {
     return cache;
 }
 
-// Format subscriber count
-function formatSubscriberCount(count) {
-    if (!count) return 'N/A';
-    const num = parseInt(count);
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    }
-    if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
+// Validate YouTube ID format (alphanumeric, underscore, hyphen)
+function isValidYouTubeId(id) {
+    return id && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
 // Create channel card element
@@ -248,9 +240,9 @@ function createChannelCard(subscription, playlistCache) {
     const card = document.createElement('div');
     card.className = 'channel-card';
     card.onclick = () => {
-        if (playlistId) {
+        if (playlistId && isValidYouTubeId(playlistId)) {
             window.open(`https://www.youtube.com/playlist?list=${playlistId}`, '_blank');
-        } else {
+        } else if (isValidYouTubeId(channelId)) {
             window.open(`https://www.youtube.com/channel/${channelId}`, '_blank');
         }
     };
@@ -259,7 +251,6 @@ function createChannelCard(subscription, playlistCache) {
                       subscription.snippet.thumbnails?.default?.url || '';
     const avatar = subscription.snippet.thumbnails?.default?.url || '';
     const title = subscription.snippet.title || 'Unknown Channel';
-    const description = subscription.snippet.description || '';
     
     card.innerHTML = `
         <img class="channel-thumbnail" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(title)}" loading="lazy">

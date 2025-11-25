@@ -31,6 +31,8 @@ const CLIENT_ID = '123456789-abc...your_client_id...apps.googleusercontent.com';
 // Replace with:
 // data-client_id="123456789-abc...your_client_id...apps.googleusercontent.com"
 
+// Note: The exact line number may vary. Look for the div with id="g_id_onload"
+
 // ==================================================
 // STEP 4: Serve the application
 // ==================================================
