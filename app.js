@@ -286,7 +286,57 @@ function saveVideoCache(cache) {
         localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify(cache));
     } catch (error) {
         console.error('Error saving video cache:', error);
+        showError('Impossible d\'enregistrer le cache des vidéos (stockage du navigateur plein)');
     }
+}
+
+// Keep only the fields the feed needs from a playlistItems API item
+function toCachedVideo(item) {
+    const snippet = item.snippet || {};
+    const thumbnails = snippet.thumbnails || {};
+    return {
+        videoId: snippet.resourceId?.videoId,
+        title: snippet.title,
+        channelTitle: snippet.channelTitle,
+        publishedAt: snippet.publishedAt,
+        thumbnail: thumbnails.high?.url || // Use High quality if available for big cards
+                   thumbnails.medium?.url ||
+                   thumbnails.default?.url || ''
+    };
+}
+
+// Convert caches written by older versions, which stored full API items
+function migrateVideoCache() {
+    const cache = getVideoCache();
+    let migrated = false;
+
+    for (const channelId in cache) {
+        if (cache[channelId].some(video => video.snippet)) {
+            cache[channelId] = cache[channelId].map(video => video.snippet ? toCachedVideo(video) : video);
+            migrated = true;
+        }
+    }
+
+    if (migrated) {
+        saveVideoCache(cache);
+    }
+}
+
+// Forget channels the user is no longer subscribed to
+function pruneUnsubscribedChannels(channelIds) {
+    const subscribed = new Set(channelIds);
+    const playlistCache = getPlaylistCache();
+    const videoCache = getVideoCache();
+
+    Object.keys(playlistCache).forEach(channelId => {
+        if (!subscribed.has(channelId)) delete playlistCache[channelId];
+    });
+    Object.keys(videoCache).forEach(channelId => {
+        if (!subscribed.has(channelId)) delete videoCache[channelId];
+    });
+
+    savePlaylistCache(playlistCache);
+    saveVideoCache(videoCache);
 }
 
 // Get last sync timestamp
@@ -415,11 +465,10 @@ async function syncAllChannels(force = false) {
         return;
     }
     
-    // Get playlist cache
-    const playlistCache = getPlaylistCache();
-    const playlistIds = Object.values(playlistCache);
-    
-    if (playlistIds.length === 0) {
+    // Get playlist cache as [channelId, playlistId] pairs
+    const channels = Object.entries(getPlaylistCache());
+
+    if (channels.length === 0) {
         console.log('No playlists to sync');
         return;
     }
@@ -435,7 +484,7 @@ async function syncAllChannels(force = false) {
 
     try {
         // Fetch videos from all playlists in parallel
-        const videoPromises = playlistIds.map(playlistId =>
+        const videoPromises = channels.map(([, playlistId]) =>
             fetchPlaylistVideos(playlistId)
         );
 
@@ -453,27 +502,18 @@ async function syncAllChannels(force = false) {
         // Merge results into cache
         results.forEach((videos, index) => {
             if (!videos || videos.length === 0) return;
-            
-            // Find the channel ID for this playlist
-            const channelId = Object.keys(playlistCache).find(
-                key => playlistCache[key] === playlistIds[index]
+
+            const [channelId] = channels[index];
+            const fetchedVideos = videos.map(toCachedVideo).filter(v => v.videoId);
+            const fetchedVideoIds = new Set(fetchedVideos.map(v => v.videoId));
+
+            // Keep older cached videos that were not returned again
+            const olderVideos = (videoCache[channelId] || []).filter(
+                v => !fetchedVideoIds.has(v.videoId)
             );
-            
-            if (!channelId) return;
-            
-            // Get existing videos for this channel
-            const existingVideos = videoCache[channelId] || [];
-            const existingVideoIds = new Set(
-                existingVideos.map(v => v.snippet?.resourceId?.videoId)
-            );
-            
-            // Add new videos
-            const newVideos = videos.filter(
-                v => !existingVideoIds.has(v.snippet?.resourceId?.videoId)
-            );
-            
+
             // Combine and keep max 10 videos
-            const combined = [...newVideos, ...existingVideos];
+            const combined = [...fetchedVideos, ...olderVideos];
             videoCache[channelId] = combined.slice(0, MAX_VIDEOS_PER_CHANNEL);
         });
         
@@ -577,8 +617,8 @@ function renderVideoFeed() {
     
     // Sort by published date (descending)
     filteredVideos.sort((a, b) => {
-        const dateA = new Date(a.snippet?.publishedAt || 0).getTime();
-        const dateB = new Date(b.snippet?.publishedAt || 0).getTime();
+        const dateA = new Date(a.publishedAt || 0).getTime();
+        const dateB = new Date(b.publishedAt || 0).getTime();
         return dateB - dateA;
     });
     
@@ -607,14 +647,10 @@ function renderVideoFeed() {
 
 // Create video card element
 function createVideoCard(video) {
-    const videoId = video.snippet?.resourceId?.videoId;
-    const title = video.snippet?.title || 'Sans titre';
-    const channelTitle = video.snippet?.channelTitle || 'Chaîne inconnue';
-    const publishedAt = video.snippet?.publishedAt;
-    const thumbnail = video.snippet?.thumbnails?.high?.url || // Use High quality if available for big cards
-                      video.snippet?.thumbnails?.medium?.url || 
-                      video.snippet?.thumbnails?.default?.url || '';
-    
+    const { videoId, publishedAt, thumbnail } = video;
+    const title = video.title || 'Sans titre';
+    const channelTitle = video.channelTitle || 'Chaîne inconnue';
+
     const card = document.createElement('div');
     card.className = 'video-card';
     
@@ -724,7 +760,9 @@ async function loadSubscriptions() {
             channelNames[channelId] = sub.snippet.title;
         });
         saveChannelNames(channelNames);
-        
+        pruneUnsubscribedChannels(channelIds);
+        renderVideoFeed();
+
         // Fetch channel details in batches
         const playlistCache = await fetchChannelDetails(channelIds);
         
@@ -758,6 +796,7 @@ async function loadSubscriptions() {
 
 // Initialize application
 function initApp() {
+    migrateVideoCache();
     setupEventListeners();
     waitForGoogleAuth();
 }
