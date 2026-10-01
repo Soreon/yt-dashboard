@@ -123,6 +123,17 @@ export function buildFeed(videoCache, channelIds = null) {
     });
 }
 
+// Lowercase text without accents, for search ("Électro" matches "electro")
+export function normalizeText(text) {
+    return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Whether every word of the query appears in the video title or channel name
+export function matchesSearch(video, query) {
+    const haystack = normalizeText(`${video.title} ${video.channelTitle}`);
+    return normalizeText(query).split(/\s+/).filter(Boolean).every(word => haystack.includes(word));
+}
+
 // Relative publication time, worded like YouTube: "il y a 3 heures", "il y a 2 semaines"
 export function getRelativeTime(dateString, now = Date.now()) {
     if (!dateString) return 'Date inconnue';

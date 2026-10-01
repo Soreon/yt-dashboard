@@ -2,17 +2,21 @@
 
 import { CLIENT_ID, SCOPES, SYNC_INTERVAL_MS } from './config.js';
 import {
-    AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchUploadsPlaylists, fetchVideoDetails
+    AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchMyChannel, fetchUploadsPlaylists, fetchVideoDetails
 } from './api.js';
-import { applyVideoDetails, buildFeed, keepChannels, mergeChannelVideos, videosMissingDetails } from './feed.js';
+import {
+    applyVideoDetails, buildFeed, keepChannels, matchesSearch, mergeChannelVideos, videosMissingDetails
+} from './feed.js';
 import { openGroupsModal, setupGroupsModal } from './groups.js';
 import {
-    clearAuthData, getAuthData, getCacheVersion, getChannelNames, getLastSync, getPlaylistCache,
-    getUserGroups, getVideoCache, hasStoredSession, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames,
-    saveLastSync, savePlaylistCache, saveVideoCache
+    clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
+    getGuideCollapsed, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, hasStoredSession, saveAccount,
+    saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveGuideCollapsed, saveLastSync,
+    savePlaylistCache, saveVideoCache
 } from './storage.js';
 import {
-    clearUI, renderFilterButtons, renderStats, renderVideoGrid, setLoading, showError, updateAuthUI
+    clearUI, renderAccount, renderFilterButtons, renderStats, renderVideoGrid, setLoading, setSyncing,
+    setupAccountMenu, showError, updateAuthUI
 } from './ui.js';
 
 const SECONDS_TO_MILLISECONDS = 1000;
@@ -22,6 +26,7 @@ let accessToken = null;
 let tokenClient = null;
 let isSyncing = false;
 let activeGroup = null; // Group currently used to filter the feed (null = all)
+let searchQuery = ''; // Text typed in the search box
 
 // Initialize Google Identity Services
 function initializeGoogleAuth() {
@@ -112,6 +117,7 @@ function signOut() {
         });
         accessToken = null;
         clearAuthData();
+        clearAccount();
 
         updateAuthUI(false);
         clearUI();
@@ -184,6 +190,7 @@ async function syncAllChannels(force = false) {
     }
 
     setLoading(true, 'Mise à jour du flux...');
+    setSyncing(true);
     isSyncing = true;
 
     try {
@@ -231,6 +238,7 @@ async function syncAllChannels(force = false) {
         }
     } finally {
         isSyncing = false;
+        setSyncing(false);
         setLoading(false);
     }
 }
@@ -245,8 +253,15 @@ async function loadSubscriptions() {
         // First, load videos from cache immediately
         renderVideoFeed();
 
-        // Fetch all subscriptions
-        const subscriptions = await fetchAllSubscriptions(accessToken);
+        // Fetch all subscriptions, and the user's name and avatar for the masthead
+        const [subscriptions, account] = await Promise.all([
+            fetchAllSubscriptions(accessToken),
+            fetchMyChannel(accessToken)
+        ]);
+        if (account) {
+            saveAccount(account);
+            renderAccount(account);
+        }
 
         if (subscriptions.length === 0) {
             showError('Aucun abonnement trouvé.');
@@ -289,17 +304,22 @@ async function loadSubscriptions() {
     }
 }
 
-// Render video feed, filtered by the active group
+// Render video feed, filtered by the active group and the search box
 function renderVideoFeed() {
     const channelIds = activeGroup ? (getUserGroups()[activeGroup] || []) : null;
-    const videos = buildFeed(getVideoCache(), channelIds);
+    const videos = buildFeed(getVideoCache(), channelIds).filter(video => matchesSearch(video, searchQuery));
 
     renderStats(Object.keys(getChannelNames()).length, videos.length);
 
-    const hint = accessToken
-        ? 'Cliquez sur "Forcer la synchro" pour récupérer les dernières vidéos.'
-        : 'Connectez-vous pour récupérer les dernières vidéos.';
-    renderVideoGrid(videos, hint);
+    let emptyMessage;
+    if (searchQuery.trim()) {
+        emptyMessage = `Aucune vidéo ne correspond à « ${searchQuery.trim()} ».`;
+    } else if (accessToken) {
+        emptyMessage = "Aucune vidéo disponible. Cliquez sur l'icône de synchronisation pour récupérer les dernières vidéos.";
+    } else {
+        emptyMessage = 'Aucune vidéo disponible. Connectez-vous pour récupérer les dernières vidéos.';
+    }
+    renderVideoGrid(videos, emptyMessage, getChannelAvatars());
 }
 
 // Render the filter buttons for the current groups
@@ -323,6 +343,7 @@ function initApp() {
 
     // Show the cached feed right away, unless the user signed out
     if (hasStoredSession()) {
+        renderAccount(getAccount());
         showCachedFeed();
     }
 
@@ -347,6 +368,24 @@ function setupEventListeners() {
     document.getElementById('authorize-button')?.addEventListener('click', requestAccessToken);
     document.getElementById('force-sync-button')?.addEventListener('click', () => syncAllChannels(true));
     document.getElementById('manage-groups-button')?.addEventListener('click', openGroupsModal);
+    setupAccountMenu();
+
+    // Menu button: collapse / expand the left navigation (remembered)
+    document.body.classList.toggle('guide-collapsed', getGuideCollapsed());
+    document.getElementById('guide-button')?.addEventListener('click', () => {
+        saveGuideCollapsed(document.body.classList.toggle('guide-collapsed'));
+    });
+
+    // Search filters the feed as you type
+    const searchInput = document.getElementById('search-input');
+    searchInput?.addEventListener('input', () => {
+        searchQuery = searchInput.value;
+        renderVideoFeed();
+    });
+    document.getElementById('search-form')?.addEventListener('submit', event => {
+        event.preventDefault();
+        searchInput?.blur();
+    });
 
     setupGroupsModal(refreshFilterButtons);
 }

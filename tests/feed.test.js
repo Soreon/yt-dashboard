@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { MAX_VIDEOS_PER_CHANNEL } from '../js/config.js';
 import {
     applyVideoDetails, buildFeed, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
-    longFormPlaylistId, mergeChannelVideos, parseIsoDuration, toCachedVideo, videosMissingDetails
+    longFormPlaylistId, matchesSearch, mergeChannelVideos, normalizeText, parseIsoDuration, toCachedVideo,
+    videosMissingDetails
 } from '../js/feed.js';
 
 // playlistItems API item, as returned by the YouTube Data API
@@ -183,4 +184,17 @@ test('formatViews matches YouTube in French', () => {
     assert.equal(formatViews(25000000), '25 M de vues');
     assert.equal(formatViews(1500000000), '1,5 Md de vues');
     assert.equal(formatViews(null), '');
+});
+
+test('normalizeText lowercases and strips accents', () => {
+    assert.equal(normalizeText('Électro ÇA Va'), 'electro ca va');
+    assert.equal(normalizeText(undefined), '');
+});
+
+test('matchesSearch needs every word in the title or channel name', () => {
+    const video = { title: 'Les Échecs pour débutants', channelTitle: 'Chaîne Stratégie' };
+    assert.equal(matchesSearch(video, ''), true);
+    assert.equal(matchesSearch(video, 'echecs'), true);
+    assert.equal(matchesSearch(video, 'ÉCHECS chaine'), true);
+    assert.equal(matchesSearch(video, 'echecs cuisine'), false);
 });

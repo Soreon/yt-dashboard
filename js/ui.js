@@ -1,6 +1,6 @@
 // DOM rendering helpers
 
-import { getRelativeTime, isValidYouTubeId } from './feed.js';
+import { formatDuration, formatViews, getRelativeTime, isValidYouTubeId } from './feed.js';
 
 // Escape HTML to prevent XSS
 export function escapeHtml(text) {
@@ -9,7 +9,7 @@ export function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Show error message
+// Show error message (toast)
 let errorTimeout = null;
 export function showError(message) {
     const errorEl = document.getElementById('error-message');
@@ -25,39 +25,94 @@ export function showError(message) {
     console.error(message);
 }
 
-// Show/hide loading indicator
+// Show/hide the progress bar at the top of the page
 export function setLoading(isLoading, message = 'Chargement des abonnements...') {
     const loadingEl = document.getElementById('loading');
     if (!loadingEl) return;
 
-    const loadingText = loadingEl.querySelector('p');
-    if (loadingText) {
-        loadingText.textContent = message;
-    }
-    loadingEl.style.display = isLoading ? 'flex' : 'none';
+    loadingEl.setAttribute('aria-label', message);
+    loadingEl.style.display = isLoading ? 'block' : 'none';
+}
+
+// Spin the sync button while a sync runs
+export function setSyncing(isSyncing) {
+    document.getElementById('force-sync-button')?.classList.toggle('spinning', isSyncing);
 }
 
 // Update authentication UI
 export function updateAuthUI(isAuthenticated) {
-    const authButton = document.getElementById('authorize-button');
-    const signOutButton = document.getElementById('signout-button');
-    const forceSyncButton = document.getElementById('force-sync-button');
-    const manageGroupsButton = document.getElementById('manage-groups-button');
+    const show = (id, visible, display = 'inline-flex') => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = visible ? display : 'none';
+    };
 
-    if (authButton) {
-        // Si connecté, on cache le bouton de connexion, sinon on l'affiche
-        authButton.style.display = isAuthenticated ? 'none' : 'inline-block';
+    // Si connecté, on cache le bouton de connexion et on affiche le compte, sinon l'inverse
+    show('authorize-button', !isAuthenticated);
+    show('account', isAuthenticated, 'block');
+    show('force-sync-button', isAuthenticated);
+    show('manage-groups-button', isAuthenticated);
+
+    if (!isAuthenticated) {
+        closeAccountMenu();
     }
-    if (signOutButton) {
-        // Inversement pour le bouton de déconnexion
-        signOutButton.style.display = isAuthenticated ? 'inline-block' : 'none';
+}
+
+// Fill an avatar element with an image, or the first letter of the name as a fallback
+function setAvatar(element, url, name) {
+    if (!element) return;
+
+    const initial = (name || '?').trim().charAt(0);
+    element.textContent = '';
+
+    if (!url) {
+        element.textContent = initial;
+        return;
     }
-    if (forceSyncButton) {
-        forceSyncButton.style.display = isAuthenticated ? 'inline-block' : 'none';
-    }
-    if (manageGroupsButton) {
-        manageGroupsButton.style.display = isAuthenticated ? 'inline-block' : 'none';
-    }
+
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.onerror = () => { element.textContent = initial; };
+    img.src = url;
+    element.appendChild(img);
+}
+
+// Signed-in user's name and avatar ({ name, avatar } or null)
+export function renderAccount(account) {
+    const name = account?.name || 'Compte YouTube';
+    setAvatar(document.getElementById('account-avatar'), account?.avatar, name);
+    setAvatar(document.getElementById('account-menu-avatar'), account?.avatar, name);
+
+    const nameEl = document.getElementById('account-name');
+    if (nameEl) nameEl.textContent = name;
+}
+
+// Account menu: toggled by the avatar, closed by a click outside or Escape
+export function setupAccountMenu() {
+    const button = document.getElementById('account-button');
+    const menu = document.getElementById('account-menu');
+    if (!button || !menu) return;
+
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        const open = menu.hidden;
+        menu.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+    });
+
+    document.addEventListener('click', event => {
+        if (!menu.hidden && !menu.contains(event.target)) closeAccountMenu();
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeAccountMenu();
+    });
+}
+
+function closeAccountMenu() {
+    const menu = document.getElementById('account-menu');
+    if (menu) menu.hidden = true;
+    document.getElementById('account-button')?.setAttribute('aria-expanded', 'false');
 }
 
 // Clear UI
@@ -75,76 +130,81 @@ export function renderStats(subscriptionCount, videoCount) {
     const statsEl = document.getElementById('stats');
     const subCountEl = document.getElementById('sub-count');
     const videoCountEl = document.getElementById('video-count');
-    if (statsEl) statsEl.style.display = 'flex';
+    if (statsEl) statsEl.style.display = 'block';
     if (subCountEl) subCountEl.textContent = subscriptionCount;
     if (videoCountEl) videoCountEl.textContent = videoCount;
 }
 
 // Render the video grid, or a message when there is nothing to show
-export function renderVideoGrid(videos, emptyHint) {
+export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}) {
     const grid = document.getElementById('subscriptions-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
 
     if (videos.length === 0) {
-        grid.innerHTML = `<div class="no-videos">Aucune vidéo disponible. ${escapeHtml(emptyHint)}</div>`;
+        grid.innerHTML = `<div class="no-videos">${escapeHtml(emptyMessage)}</div>`;
         return;
     }
 
     videos.forEach(video => {
-        grid.appendChild(createVideoCard(video));
+        grid.appendChild(createVideoCard(video, channelAvatars[video.channelId]));
     });
 }
 
-// Create video card element
-function createVideoCard(video) {
-    const { videoId, publishedAt, thumbnail } = video;
+// Create a video card, laid out like YouTube's: thumbnail, then avatar, title, channel and stats.
+// Thumbnail and title link to the video, avatar and channel name to the channel
+function createVideoCard(video, channelAvatar) {
+    const { videoId, channelId, publishedAt, thumbnail } = video;
     const title = video.title || 'Sans titre';
     const channelTitle = video.channelTitle || 'Chaîne inconnue';
 
-    // A real link: middle-click, "open in new tab", copy link and keyboard all work
-    const hasLink = isValidYouTubeId(videoId);
-    const card = document.createElement(hasLink ? 'a' : 'div');
+    const videoUrl = isValidYouTubeId(videoId) ? `https://www.youtube.com/watch?v=${videoId}` : null;
+    const channelUrl = isValidYouTubeId(channelId) ? `https://www.youtube.com/channel/${channelId}` : null;
+    const link = (url, className, content, extra = '') => url
+        ? `<a class="${className}" href="${url}" target="_blank" rel="noopener noreferrer" ${extra}>${content}</a>`
+        : `<span class="${className}">${content}</span>`;
+
+    const duration = formatDuration(video.duration);
+    const stats = [formatViews(video.views), getRelativeTime(publishedAt)].filter(Boolean);
+
+    const card = document.createElement('div');
     card.className = 'video-card';
 
-    if (hasLink) {
-        card.href = `https://www.youtube.com/watch?v=${videoId}`;
-        card.target = '_blank';
-        card.rel = 'noopener noreferrer';
-    }
-
-    // Structure modifiée pour le nouveau CSS (miniature décorative : le titre est déjà dans le lien)
+    // Thumbnail and avatar are decorative duplicates of the title and channel links
     card.innerHTML = `
-        <img class="video-thumbnail" src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
-        <div class="video-info">
-            <div class="video-title">${escapeHtml(title)}</div>
-            <div class="video-meta-row">
-                <div class="video-channel">
-                    <span>${escapeHtml(channelTitle)}</span>
-                </div>
-                <div class="video-date">${getRelativeTime(publishedAt)}</div>
+        ${link(videoUrl, 'thumbnail', `
+            <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
+            ${duration ? `<span class="duration-badge">${duration}</span>` : ''}
+        `, 'tabindex="-1" aria-hidden="true"')}
+        <div class="details">
+            ${link(channelUrl, 'channel-avatar', '<span class="avatar"></span>', 'tabindex="-1" aria-hidden="true"')}
+            <div class="meta">
+                <h3 class="video-title">${link(videoUrl, 'video-title-link', escapeHtml(title), `title="${escapeHtml(title)}"`)}</h3>
+                ${link(channelUrl, 'channel-name', escapeHtml(channelTitle))}
+                <div class="video-stats">${stats.map(text => `<span>${escapeHtml(text)}</span>`).join('')}</div>
             </div>
         </div>
     `;
 
+    setAvatar(card.querySelector('.avatar'), channelAvatar, channelTitle);
     return card;
 }
 
-// Render the filter buttons ("Tous" + one per group); onSelect(groupName or null)
+// Render the filter chips ("Tous" + one per group); onSelect(groupName or null)
 export function renderFilterButtons(groupNames, activeGroup, onSelect) {
     const filterContainer = document.getElementById('filter-buttons');
     if (!filterContainer) return;
 
     const filtersBar = document.getElementById('filters-bar');
-    if (filtersBar) filtersBar.style.display = 'block';
+    if (filtersBar) filtersBar.style.display = 'flex';
 
     filterContainer.innerHTML = '';
 
     const entries = [['Tous', null], ...groupNames.map(name => [name, name])];
     entries.forEach(([label, groupName]) => {
         const button = document.createElement('button');
-        button.className = groupName === activeGroup ? 'filter-button active' : 'filter-button';
+        button.className = groupName === activeGroup ? 'chip filter-button active' : 'chip filter-button';
         button.textContent = label;
         button.onclick = () => {
             filterContainer.querySelectorAll('.filter-button').forEach(btn => btn.classList.remove('active'));

@@ -57,6 +57,19 @@ export async function fetchAllSubscriptions(token) {
     return allSubscriptions;
 }
 
+// Name and avatar of the signed-in user's channel ({ name, avatar }, null if unavailable)
+export async function fetchMyChannel(token) {
+    try {
+        const data = await apiFetch('channels', { part: 'snippet', mine: 'true' }, token);
+        const snippet = data.items?.[0]?.snippet;
+        return snippet ? { name: snippet.title, avatar: snippet.thumbnails?.default?.url || '' } : null;
+    } catch (error) {
+        if (error instanceof AuthError) throw error;
+        console.error('Error fetching account:', error);
+        return null;
+    }
+}
+
 // Uploads playlist of each channel, in batches of 50: { channelId: playlistId }
 export async function fetchUploadsPlaylists(channelIds, token) {
     const playlists = {};

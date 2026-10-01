@@ -6,8 +6,10 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 
 - **Connexion Google** via Google Identity Services (OAuth 2.0, *token model*) : aucun secret côté serveur.
 - **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts.
-- **Synchronisation** : au chargement si la dernière date de plus d'une heure, ou à la demande avec « Forcer la synchro ».
+- **Synchronisation** : au chargement si la dernière date de plus d'une heure, ou à la demande.
 - **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe.
+- **Recherche** dans le fil, par titre ou nom de chaîne.
+- **Interface inspirée de YouTube** : mêmes codes de mise en page (cartes avec durée, vues et avatar de la chaîne, filtres en pastilles, menu latéral), thème clair ou sombre selon le système, adaptée au mobile.
 - **Cache local** : le fil s'affiche instantanément depuis le cache, y compris quand la session a expiré.
 
 ## Installation
@@ -46,11 +48,13 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 ## Utilisation
 
 - **Se connecter à YouTube** : autorise l'accès en lecture seule à vos abonnements (`youtube.readonly`). L'écran de consentement n'apparaît que la première fois.
-- **Forcer la synchro** : récupère immédiatement les dernières vidéos.
-- **Gérer les groupes** : nommez un groupe, cochez ses chaînes, puis « Créer le groupe ». Réutiliser un nom existant remplace le groupe.
+- **Synchroniser** (icône ⟳ en haut à droite) : récupère immédiatement les dernières vidéos.
+- **Gérer les groupes** (icône à côté) : nommez un groupe, cochez ses chaînes, puis « Créer le groupe ». Réutiliser un nom existant remplace le groupe.
+- **Rechercher** : la barre du haut filtre le fil au fil de la frappe (titre ou chaîne, sans tenir compte des accents ni des majuscules).
+- **Menu** (☰) : réduit ou déplie le menu latéral ; le choix est mémorisé.
 - **Filtres** : « Tous » ou un groupe. Le filtre choisi est conservé après une synchronisation.
 - **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché. Cliquez sur « Se connecter à YouTube » pour le mettre à jour.
-- **Se déconnecter** : révoque le jeton et vide l'écran. Les caches et les groupes restent dans le navigateur.
+- **Se déconnecter** (menu de votre avatar) : révoque le jeton et vide l'écran. Les caches et les groupes restent dans le navigateur.
 
 ## Fonctionnement
 
@@ -77,7 +81,7 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/api.js](js/api.js) | Appels à l'API YouTube Data v3 |
 | [js/storage.js](js/storage.js) | Lecture et écriture du `localStorage` |
 | [js/feed.js](js/feed.js) | Logique pure du fil (fusion, tri, dates), sans DOM : testée unitairement |
-| [js/ui.js](js/ui.js) | Affichage du fil, des filtres et des messages |
+| [js/ui.js](js/ui.js) | Affichage du fil, des filtres, du compte et des messages |
 | [js/groups.js](js/groups.js) | Fenêtre de gestion des groupes |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
@@ -101,6 +105,8 @@ npm test
 | `yt_video_cache` | ID de chaîne → dernières vidéos (ID, titre, chaîne, date, miniature, durée, vues) |
 | `yt_last_sync` | Date de la dernière synchronisation réussie |
 | `yt_user_groups` | Nom du groupe → liste d'ID de chaînes |
+| `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
+| `yt_guide_collapsed` | Menu latéral réduit ou non |
 | `yt_cache_version` | Version du format du cache (un cache plus ancien est reconstruit à la synchronisation suivante) |
 
 Pour repartir de zéro : `localStorage.clear()` dans la console du navigateur.
@@ -111,11 +117,11 @@ Le quota par défaut est de 10 000 unités par jour et par projet Google Cloud. 
 
 | Opération | Coût |
 | --- | --- |
-| Chargement des abonnements | 1 unité par tranche de 50 abonnements |
+| Chargement des abonnements | 1 unité par tranche de 50 abonnements, plus 1 unité pour votre nom et votre avatar |
 | Playlists des nouvelles chaînes | 1 unité par lot de 50 chaînes jamais vues |
 | **Synchronisation** | **1 unité par chaîne**, plus 1 unité par lot de 50 vidéos récupérées (durées et vues) |
 
-Exemple avec 200 abonnements : environ 4 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une par heure ; « Forcer la synchro » ignore cette limite.
+Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une par heure ; « Forcer la synchro » ignore cette limite.
 
 ## Sécurité
 

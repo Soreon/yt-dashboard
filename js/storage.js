@@ -8,6 +8,8 @@ const GROUPS_KEY = 'yt_user_groups';
 const CHANNEL_NAMES_KEY = 'yt_channel_names';
 const CHANNEL_AVATARS_KEY = 'yt_channel_avatars';
 const CACHE_VERSION_KEY = 'yt_cache_version';
+const ACCOUNT_KEY = 'yt_account';
+const GUIDE_COLLAPSED_KEY = 'yt_guide_collapsed';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -113,6 +115,28 @@ export function getChannelAvatars() {
 
 export function saveChannelAvatars(avatars) {
     return writeJSON(CHANNEL_AVATARS_KEY, avatars);
+}
+
+// Signed-in user's channel: { name, avatar }
+export function getAccount() {
+    return readJSON(ACCOUNT_KEY, null);
+}
+
+export function saveAccount(account) {
+    return writeJSON(ACCOUNT_KEY, account);
+}
+
+export function clearAccount() {
+    remove(ACCOUNT_KEY);
+}
+
+// Whether the left navigation is collapsed (menu button)
+export function getGuideCollapsed() {
+    return readJSON(GUIDE_COLLAPSED_KEY, false) === true;
+}
+
+export function saveGuideCollapsed(collapsed) {
+    return writeJSON(GUIDE_COLLAPSED_KEY, collapsed);
 }
 
 // Format version of the video cache (0 = written before versioning)

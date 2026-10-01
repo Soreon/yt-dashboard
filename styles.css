@@ -1,21 +1,63 @@
+/* Global Video Feed — styles inspired by the current YouTube web UI
+   (light / dark theme following the system, like YouTube) */
+
 :root {
-    /* Palette inspirée des images */
-    --primary-color: #ff1a1a; /* Rouge néon vibrant */
-    --primary-glow: 0 0 20px rgba(255, 26, 26, 0.4);
-    --primary-glow-hover: 0 0 30px rgba(255, 26, 26, 0.6);
-    
-    --background: #050505; /* Noir profond */
-    --card-background: #121212; /* Gris très sombre */
-    --card-hover: #1a1a1a;
-    
-    --text-primary: #ffffff;
-    --text-secondary: #888888;
-    
-    --border-radius: 24px; /* Coins très arrondis comme sur l'image */
-    --btn-radius: 50px; /* Boutons "pilules" */
-    
-    --spacing: 20px;
-    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --bg: #ffffff;
+    --bg-raised: #ffffff;
+    --text: #0f0f0f;
+    --text-secondary: #606060;
+    --hover: rgba(0, 0, 0, 0.05);
+    --active: rgba(0, 0, 0, 0.1);
+    --chip: rgba(0, 0, 0, 0.05);
+    --chip-hover: rgba(0, 0, 0, 0.1);
+    --chip-selected-bg: #0f0f0f;
+    --chip-selected-text: #ffffff;
+    --divider: rgba(0, 0, 0, 0.1);
+    --search-bg: #ffffff;
+    --search-border: #cccccc;
+    --search-button: #f8f8f8;
+    --cta: #065fd4;
+    --cta-hover: #def1ff;
+    --signin-border: rgba(0, 0, 0, 0.1);
+    --badge-bg: rgba(0, 0, 0, 0.6);
+    --toast-bg: #0f0f0f;
+    --toast-text: #ffffff;
+    --placeholder: #e5e5e5;
+    --shadow: 0 4px 32px rgba(0, 0, 0, 0.1);
+    --brand: #ff0033;
+
+    --masthead-height: 56px;
+    --guide-width: 240px;
+    --mini-guide-width: 72px;
+    --font: "Roboto", "Arial", sans-serif;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #0f0f0f;
+        --bg-raised: #282828;
+        --text: #f1f1f1;
+        --text-secondary: #aaaaaa;
+        --hover: rgba(255, 255, 255, 0.1);
+        --active: rgba(255, 255, 255, 0.2);
+        --chip: rgba(255, 255, 255, 0.1);
+        --chip-hover: rgba(255, 255, 255, 0.2);
+        --chip-selected-bg: #f1f1f1;
+        --chip-selected-text: #0f0f0f;
+        --divider: rgba(255, 255, 255, 0.2);
+        --search-bg: #121212;
+        --search-border: #303030;
+        --search-button: #222222;
+        --cta: #3ea6ff;
+        --cta-hover: #263850;
+        --signin-border: rgba(255, 255, 255, 0.2);
+        --toast-bg: #f1f1f1;
+        --toast-text: #0f0f0f;
+        --placeholder: #272727;
+        --shadow: 0 4px 32px rgba(0, 0, 0, 0.6);
+        color-scheme: dark;
+    }
 }
 
 * {
@@ -24,232 +66,505 @@
     box-sizing: border-box;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: var(--background);
-    color: var(--text-primary);
-    line-height: 1.6;
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 20px;
+    background-color: var(--bg);
+    color: var(--text);
     -webkit-font-smoothing: antialiased;
 }
 
-.container {
-    max-width: 1600px; /* Plus large pour les écrans modernes */
-    margin: 0 auto;
-    padding: var(--spacing);
+a {
+    color: inherit;
+    text-decoration: none;
 }
 
-/* --- HEADER --- */
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 30px 0;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: var(--spacing);
-}
-
-h1 {
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: var(--text-primary);
-    letter-spacing: -1px;
-}
-
-#auth-container {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-/* --- BUTTONS --- */
 button {
-    padding: 12px 28px;
+    font: inherit;
+    color: inherit;
+    background: none;
     border: none;
-    border-radius: var(--btn-radius);
     cursor: pointer;
-    font-size: 0.95rem;
-    font-weight: 600;
-    transition: var(--transition);
+}
+
+svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+}
+
+/* --- PROGRESS BAR (top of the page, like YouTube's navigation bar) --- */
+.progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 3000;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 40%;
+    background-color: var(--brand);
+    animation: progress 1.2s ease-in-out infinite;
+}
+
+@keyframes progress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+}
+
+/* --- MASTHEAD --- */
+.masthead {
+    position: sticky;
+    top: 0;
+    z-index: 2000;
+    height: var(--masthead-height);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background-color: var(--bg);
+}
+
+.masthead-start,
+.masthead-end {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.masthead-start {
+    gap: 8px;
+}
+
+.masthead-end {
+    gap: 8px;
+}
+
+.icon-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-/* Bouton Primaire (Rouge Néon) */
-button.primary-button, 
-#authorize-button, 
-#force-sync-button,
-#save-group {
-    background-color: var(--primary-color);
-    color: white;
-    box-shadow: var(--primary-glow);
+.icon-button:hover {
+    background-color: var(--hover);
 }
 
-button.primary-button:hover, 
-#authorize-button:hover, 
-#force-sync-button:hover,
-#save-group:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--primary-glow-hover);
+.icon-button:active {
+    background-color: var(--active);
 }
 
-/* Bouton Secondaire (Outline/Ghost) */
-button.secondary-button,
-#manage-groups-button,
-#signout-button {
-    background-color: transparent;
-    border: 1px solid #333;
-    color: var(--text-primary);
+.icon-button.spinning svg {
+    animation: spin 1s linear infinite;
 }
 
-button.secondary-button:hover,
-#manage-groups-button:hover,
-#signout-button:hover {
-    border-color: var(--text-secondary);
-    background-color: rgba(255, 255, 255, 0.05);
+@keyframes spin {
+    100% { transform: rotate(360deg); }
 }
 
-/* --- FILTERS --- */
-.filters-bar {
-    margin-bottom: 30px;
-    padding: 0;
-    background: transparent;
-}
-
-.filter-buttons {
+.logo {
     display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+    padding: 0 8px 0 4px;
 }
 
-.filter-button {
-    background-color: #1a1a1a;
-    color: var(--text-secondary);
-    border: 1px solid transparent;
-    padding: 10px 24px;
+.logo-icon {
+    width: 28px;
+    height: 28px;
+    fill: var(--brand);
 }
 
-.filter-button:hover {
-    color: var(--text-primary);
-    background-color: #252525;
+.logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
 }
 
-.filter-button.active {
-    background-color: var(--primary-color);
-    color: white;
-    box-shadow: var(--primary-glow);
-}
-
-/* --- GRID & CARDS --- */
-.subscriptions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 24px;
-}
-
-.video-card {
-    background-color: var(--card-background);
-    border-radius: var(--border-radius);
-    overflow: hidden;
-    transition: var(--transition);
+/* Search box */
+.search {
+    flex: 0 1 640px;
     display: flex;
-    flex-direction: column;
-    border: 1px solid transparent;
-    position: relative;
-    color: inherit;
-    text-decoration: none;
+    min-width: 0;
 }
 
-/* Effet de bordure rouge au survol (comme sur l'image), et au clavier */
-a.video-card:hover,
-a.video-card:focus-visible {
-    transform: translateY(-6px);
-    border-color: var(--primary-color);
-    box-shadow: var(--primary-glow);
+.search-input {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    padding: 0 4px 0 16px;
+    font: inherit;
+    font-size: 16px;
+    color: var(--text);
+    background-color: var(--search-bg);
+    border: 1px solid var(--search-border);
+    border-right: none;
+    border-radius: 40px 0 0 40px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.search-input:focus {
     outline: none;
-    z-index: 2;
+    border-color: var(--cta);
+    padding-left: 15px;
+    border-width: 1px;
 }
 
-.video-thumbnail {
+.search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.search-button {
+    width: 64px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--search-button);
+    border: 1px solid var(--search-border);
+    border-radius: 0 40px 40px 0;
+}
+
+.search-button:hover {
+    background-color: var(--chip-hover);
+}
+
+/* Sign-in button (outlined pill, blue) */
+.signin-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 15px 0 11px;
+    border: 1px solid var(--signin-border);
+    border-radius: 18px;
+    color: var(--cta);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.signin-button:hover {
+    background-color: var(--cta-hover);
+    border-color: transparent;
+}
+
+/* Account avatar and menu */
+.account {
+    position: relative;
+}
+
+.avatar-button {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background-color: #5c6bc0;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.avatar img {
     width: 100%;
-    aspect-ratio: 16 / 9;
+    height: 100%;
     object-fit: cover;
-    background-color: #1a1a1a;
     display: block;
 }
 
-.video-info {
-    padding: 20px;
-    flex: 1;
+.avatar-large {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+}
+
+.menu {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    min-width: 280px;
+    padding: 8px 0;
+    border-radius: 12px;
+    background-color: var(--bg-raised);
+    box-shadow: var(--shadow);
+    z-index: 2100;
+}
+
+.menu-header {
     display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border-bottom: 1px solid var(--divider);
+    margin-bottom: 8px;
+}
+
+.menu-header-name {
+    font-size: 16px;
+    line-height: 22px;
+    font-weight: 500;
+}
+
+.menu-item {
+    width: 100%;
+    height: 40px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+}
+
+.menu-item:hover {
+    background-color: var(--hover);
+}
+
+/* --- GUIDE (left navigation) --- */
+.guide {
+    position: fixed;
+    top: var(--masthead-height);
+    bottom: 0;
+    left: 0;
+    width: var(--guide-width);
+    padding: 12px;
+    overflow-y: auto;
+    background-color: var(--bg);
+    z-index: 1000;
+}
+
+.guide-item {
+    height: 40px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.guide-item:hover {
+    background-color: var(--hover);
+}
+
+.guide-item.active {
+    background-color: var(--chip);
+    font-weight: 500;
+}
+
+.guide-item.active:hover {
+    background-color: var(--chip-hover);
+}
+
+.guide-footer {
+    margin-top: 12px;
+    padding: 16px 12px 0;
+    border-top: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.page {
+    margin-left: var(--guide-width);
+    padding: 0 24px 48px;
+    min-width: 0;
+}
+
+/* Collapsed guide (menu button): mini guide with icons above labels */
+body.guide-collapsed .guide {
+    width: var(--mini-guide-width);
+    padding: 4px;
+}
+
+body.guide-collapsed .guide-item {
+    height: auto;
     flex-direction: column;
-    justify-content: space-between;
+    gap: 6px;
+    padding: 16px 0 14px;
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 400;
+}
+
+body.guide-collapsed .guide-item.active {
+    background-color: transparent;
+}
+
+body.guide-collapsed .guide-item.active:hover,
+body.guide-collapsed .guide-item:hover {
+    background-color: var(--hover);
+}
+
+body.guide-collapsed .guide-footer {
+    display: none !important;
+}
+
+body.guide-collapsed .page {
+    margin-left: var(--mini-guide-width);
+}
+
+/* --- CHIPS (group filters) --- */
+.chips-bar {
+    position: sticky;
+    top: var(--masthead-height);
+    z-index: 900;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    background-color: var(--bg);
+    margin: 0 -24px;
+    padding: 0 24px;
+}
+
+.chips {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+    display: none;
+}
+
+.chip {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background-color: var(--chip);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.chip:hover {
+    background-color: var(--chip-hover);
+}
+
+.chip.active {
+    background-color: var(--chip-selected-bg);
+    color: var(--chip-selected-text);
+}
+
+/* --- VIDEO GRID --- */
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    column-gap: 16px;
+    row-gap: 40px;
+    padding-top: 24px;
+}
+
+.video-card {
+    min-width: 0;
+}
+
+.thumbnail {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: var(--placeholder);
+}
+
+.thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.duration-badge {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background-color: var(--badge-bg);
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+}
+
+.details {
+    display: flex;
+    gap: 12px;
+    padding-top: 12px;
+}
+
+.channel-avatar .avatar {
+    width: 36px;
+    height: 36px;
+}
+
+.meta {
+    min-width: 0;
+    flex: 1;
 }
 
 .video-title {
-    font-weight: 700;
-    font-size: 1.1rem;
-    margin-bottom: 8px;
-    line-height: 1.4;
-    color: var(--text-primary);
-    
+    font-size: 16px;
+    line-height: 22px;
+    font-weight: 500;
+    margin-bottom: 4px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
 }
 
-.video-meta-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 12px;
-}
-
-.video-channel {
+.channel-name,
+.video-stats {
+    display: block;
     color: var(--text-secondary);
-    font-size: 0.9rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 14px;
+    line-height: 20px;
 }
 
-.video-date {
-    color: #555;
-    font-size: 0.85rem;
+.channel-name:hover {
+    color: var(--text);
 }
 
-/* --- STATS & LOADING --- */
-.stats {
-    display: inline-flex;
-    gap: 20px;
-    padding: 10px 20px;
-    background-color: #111;
-    border-radius: 50px;
-    border: 1px solid #222;
-    margin-bottom: 20px;
-    width: fit-content; /* JS sets display: flex */
-}
-
-.stat-label {
-    color: var(--text-secondary);
-}
-
-.stat-value {
-    color: var(--primary-color);
-    font-weight: 700;
-}
-
-.error-message {
-    background-color: rgba(255, 26, 26, 0.1);
-    border: 1px solid var(--primary-color);
-    color: var(--text-primary);
-    padding: 14px 24px;
-    border-radius: 16px;
-    margin-bottom: 20px;
-    font-weight: 500;
+.video-stats span + span::before {
+    content: "•";
+    margin: 0 4px;
 }
 
 .no-videos {
@@ -257,94 +572,115 @@ a.video-card:focus-visible {
     text-align: center;
     padding: 80px 20px;
     color: var(--text-secondary);
-    font-size: 1.1rem;
+    font-size: 16px;
+    line-height: 22px;
 }
 
-.loading {
-    padding: 50px;
-    flex-direction: column;
+/* --- TOAST (bottom-left, like YouTube notifications) --- */
+.toast {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    z-index: 3000;
+    max-width: min(560px, calc(100vw - 48px));
+    padding: 14px 16px;
+    border-radius: 8px;
+    background-color: var(--toast-bg);
+    color: var(--toast-text);
+    box-shadow: var(--shadow);
+}
+
+/* --- BUTTONS --- */
+.primary-button,
+.secondary-button,
+.text-button {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 18px;
+    font-weight: 500;
+    display: inline-flex;
     align-items: center;
-    color: var(--text-secondary);
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
 }
 
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(255, 26, 26, 0.1);
-    border-top: 3px solid var(--primary-color);
-    border-radius: 50%;
-    animation: spin 1s infinite linear;
-    margin-bottom: 15px;
+.primary-button {
+    background-color: var(--chip-selected-bg);
+    color: var(--chip-selected-text);
 }
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
+.primary-button:hover {
+    opacity: 0.85;
+}
 
-/* --- MODAL (Style Glassmorphism image 2) --- */
+.secondary-button {
+    background-color: var(--chip);
+}
+
+.secondary-button:hover {
+    background-color: var(--chip-hover);
+}
+
+.text-button {
+    color: var(--cta);
+}
+
+.text-button:hover {
+    background-color: var(--cta-hover);
+}
+
+/* --- MODAL (dialog) --- */
 .modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px); /* Effet de flou */
+    inset: 0;
+    z-index: 2500;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-}
-
-.modal[style*="display: flex"] {
-    opacity: 1;
-    pointer-events: auto;
+    background-color: rgba(0, 0, 0, 0.5);
 }
 
 .modal-content {
-    background: rgba(20, 20, 20, 0.95);
-    border: 1px solid #333;
-    border-radius: 24px;
-    width: 90%;
-    max-width: 500px;
-    max-height: 85vh;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    width: calc(100% - 32px);
+    max-width: 480px;
+    max-height: calc(100vh - 64px);
     display: flex;
     flex-direction: column;
+    border-radius: 12px;
+    background-color: var(--bg-raised);
+    box-shadow: var(--shadow);
     overflow: hidden;
 }
 
 .modal-header {
-    padding: 24px;
-    border-bottom: 1px solid #333;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 8px 24px;
 }
 
 .modal-header h2 {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-.close-button {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 4px 12px;
-    flex: none; /* Not stretched by the mobile button rule */
+    font-size: 16px;
+    line-height: 22px;
+    font-weight: 500;
 }
 
 .modal-body {
-    padding: 24px;
+    padding: 8px 24px 16px;
     overflow-y: auto;
 }
 
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 24px 20px;
+    border-top: 1px solid var(--divider);
+}
+
 .form-group {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
 }
 
 .form-group:last-child {
@@ -353,86 +689,178 @@ a.video-card:focus-visible {
 
 .form-group > label {
     display: block;
-    margin-bottom: 10px;
-    font-size: 0.9rem;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+}
+
+.text-field {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 15px;
+    color: var(--text);
+    background-color: transparent;
+    border: 1px solid var(--search-border);
+    border-radius: 8px;
+}
+
+.text-field:focus {
+    outline: none;
+    border-color: var(--cta);
+}
+
+.text-field::placeholder {
     color: var(--text-secondary);
 }
 
-/* Input style brillant comme sur l'image */
-.form-group input[type="text"] {
-    width: 100%;
-    padding: 14px 16px;
-    background-color: #0a0a0a;
-    border: 1px solid #333;
-    border-radius: 12px;
-    color: white;
-    font-family: inherit;
-    font-size: 1rem;
-    transition: var(--transition);
-}
-
-.form-group input[type="text"]:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 15px rgba(255, 26, 26, 0.2);
-}
-
 .channel-list {
-    background: transparent;
-    max-height: 300px;
+    max-height: 320px;
     overflow-y: auto;
-    padding: 0;
+    margin: 0 -24px;
 }
 
 .channel-checkbox {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 12px;
-    margin-bottom: 4px;
-    border: 1px solid transparent;
+    gap: 16px;
+    min-height: 40px;
+    padding: 4px 24px;
     cursor: pointer;
-    transition: var(--transition);
+}
+
+.channel-checkbox:hover {
+    background-color: var(--hover);
+}
+
+.channel-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    accent-color: var(--text);
+    cursor: pointer;
 }
 
 .channel-checkbox span {
     flex: 1;
-    font-size: 0.95rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .no-channels {
     color: var(--text-secondary);
     text-align: center;
-    padding: 40px 20px;
+    padding: 32px 24px;
 }
 
-.channel-checkbox:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-    border-color: #333;
+/* --- RESPONSIVE (YouTube breakpoints) --- */
+
+/* Medium screens: mini guide; the menu button hides it */
+@media (max-width: 1311px) {
+    .guide {
+        width: var(--mini-guide-width);
+        padding: 4px;
+    }
+
+    .guide-item {
+        height: auto;
+        flex-direction: column;
+        gap: 6px;
+        padding: 16px 0 14px;
+        font-size: 10px;
+        line-height: 14px;
+    }
+
+    .guide-item.active {
+        background-color: transparent;
+        font-weight: 400;
+    }
+
+    .guide-footer {
+        display: none !important;
+    }
+
+    .page {
+        margin-left: var(--mini-guide-width);
+    }
+
+    body.guide-collapsed .guide {
+        display: none;
+    }
+
+    body.guide-collapsed .page {
+        margin-left: 0;
+    }
 }
 
-/* Checkbox rouge personnalisée */
-.channel-checkbox input[type="checkbox"] {
-    accent-color: var(--primary-color);
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    cursor: pointer;
+/* Small screens: no guide, compact masthead, full-width cards */
+@media (max-width: 791px) {
+    .guide,
+    .guide-button {
+        display: none;
+    }
+
+    .page,
+    body.guide-collapsed .page {
+        margin-left: 0;
+    }
 }
 
-.modal-footer {
-    padding: 24px;
-    border-top: 1px solid #333;
-    display: flex;
-    justify-content: flex-end;
-}
+@media (max-width: 656px) {
+    .masthead {
+        padding: 0 8px 0 12px;
+        gap: 8px;
+    }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .container { padding: 15px; }
-    h1 { font-size: 1.8rem; }
-    .subscriptions-grid { grid-template-columns: 1fr; }
-    #auth-container { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
-    button { flex: 1; }
+    .logo-text {
+        display: none;
+    }
+
+    .search-button {
+        width: 48px;
+    }
+
+    .signin-button span {
+        display: none;
+    }
+
+    .signin-button {
+        padding: 0 7px;
+    }
+
+    .page {
+        padding: 0 0 48px;
+    }
+
+    .chips-bar {
+        margin: 0;
+        padding: 0 12px;
+        height: 48px;
+    }
+
+    .video-grid {
+        grid-template-columns: 1fr;
+        row-gap: 24px;
+        padding-top: 8px;
+    }
+
+    .thumbnail {
+        border-radius: 0;
+    }
+
+    .details {
+        padding: 12px 12px 0;
+    }
+
+    .toast {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        max-width: none;
+    }
 }
