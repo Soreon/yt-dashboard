@@ -2,11 +2,10 @@
 
 import { formatDuration, formatViews, getRelativeTime, isValidYouTubeId } from './feed.js';
 
-// Escape HTML to prevent XSS
+// Escape HTML to prevent XSS, in text and in quoted attribute values
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' };
 export function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text ?? '').replace(/[&<>"']/g, char => HTML_ESCAPES[char]);
 }
 
 // Show error message (toast)
