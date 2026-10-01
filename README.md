@@ -9,7 +9,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 - **Synchronisation** : au chargement, puis automatiquement tant que l'onglet est ouvert (au plus toutes les 30 minutes), ou à la demande.
 - **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe.
 - **Vidéos vues** : une vidéo ouverte depuis le fil, ou marquée comme vue, n'y apparaît plus.
-- **Historique** des vidéos vues, regroupées par jour, avec recherche.
+- **Historique** des vidéos vues, regroupées par jour, avec recherche, et import de votre historique YouTube (Google Takeout).
 - **Recherche** dans le fil, par titre ou nom de chaîne.
 - **Interface inspirée de YouTube** : mêmes codes de mise en page (cartes avec durée, vues et avatar de la chaîne, filtres en pastilles, menu latéral), thème clair ou sombre selon le système, adaptée au mobile.
 - **Cache local** : le fil s'affiche instantanément depuis le cache, y compris quand la session a expiré.
@@ -56,6 +56,7 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 - **Menu** (☰) : réduit ou déplie le menu latéral ; le choix est mémorisé.
 - **Vidéos vues** : ouvrir une vidéo (clic, clic molette) la marque comme vue. Sa carte reste affichée, grisée avec une barre rouge, pour ne pas décaler la grille pendant que vous en ouvrez plusieurs ; elle disparaît du fil quand vous revenez sur l'onglet. Le bouton ✓ d'une carte (au survol) la marque comme vue tout de suite, avec « Annuler » ; sur une carte grisée, il la remet en non vue.
 - **Historique** (menu latéral, ou barre du bas sur téléphone) : les vidéos vues, des plus récentes aux plus anciennes, regroupées par jour. La barre de recherche y filtre l'historique. La croix d'une vidéo la retire de l'historique (elle revient dans le fil) ; « Effacer tout l'historique » vide la liste. Les 500 dernières vidéos vues sont conservées.
+- **Importer votre historique YouTube** (page Historique) : l'API YouTube ne donne pas accès à l'historique, mais Google Takeout permet de l'exporter. Sur https://takeout.google.com/, ne sélectionnez que « YouTube et YouTube Music », ne gardez que l'historique, et choisissez le format **JSON** pour l'historique dans « Formats multiples » (le HTML proposé par défaut n'est pas pris en charge). Importez ensuite le fichier `watch-history.json` de l'archive : vos 500 vidéos les plus récentes rejoignent l'historique avec leur date de visionnage, et celles présentes dans le fil en sont retirées. Réimporter un export plus récent ne crée pas de doublon. Le fichier est lu dans le navigateur et n'est envoyé nulle part.
 - **Filtres** : « Tous » ou un groupe. Le filtre choisi est conservé après une synchronisation.
 - **Synchronisation automatique** : toutes les 5 minutes et à chaque retour sur l'onglet, l'application synchronise si la dernière synchronisation date de plus de 30 minutes. Si de nouvelles vidéos arrivent alors que vous êtes descendu dans le fil, une pastille « Nouvelles vidéos » les affiche au lieu de déplacer la page.
 - **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché et la synchronisation automatique s'arrête. Cliquez sur « Se connecter » pour reprendre.
@@ -88,7 +89,7 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/feed.js](js/feed.js) | Logique pure du fil (fusion, tri, dates), sans DOM : testée unitairement |
 | [js/ui.js](js/ui.js) | Affichage du fil, des filtres, du compte et des messages |
 | [js/groups.js](js/groups.js) | Fenêtre de gestion des groupes (liste et éditeur) |
-| [js/history-model.js](js/history-model.js) | Vidéos vues et regroupement de l'historique par jour, sans DOM : testée unitairement |
+| [js/history-model.js](js/history-model.js) | Vidéos vues, regroupement par jour et import Google Takeout, sans DOM : testée unitairement |
 | [js/groups-model.js](js/groups-model.js) | Création, renommage et suppression de groupes, sans DOM : testée unitairement |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
@@ -140,7 +141,7 @@ Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 22
 
 ## Limites connues
 
-- L'historique YouTube lui-même n'est pas accessible : l'API ne le fournit plus depuis 2016. L'historique de l'application ne contient que les vidéos ouvertes ou marquées depuis le fil.
+- L'historique YouTube n'est pas accessible en direct (l'API ne le fournit plus depuis 2016) : il faut l'importer depuis Google Takeout, et réimporter un nouvel export pour le mettre à jour.
 - Sans serveur, le jeton Google (environ 1 h) ne peut pas être renouvelé sans un clic : la synchronisation automatique s'interrompt à son expiration.
 
 ## Licence

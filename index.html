@@ -100,6 +100,20 @@
                     <span>Effacer tout l'historique</span>
                 </button>
             </div>
+            <details class="import-help">
+                <summary>Importer votre historique YouTube</summary>
+                <p>YouTube ne donne pas accès à l'historique depuis son API, mais vous pouvez l'exporter :</p>
+                <ol>
+                    <li>Ouvrez <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">Google Takeout</a>, désélectionnez tout, puis cochez seulement « YouTube et YouTube Music ».</li>
+                    <li>Dans le choix des données YouTube, ne gardez que l'historique.</li>
+                    <li>Dans « Formats multiples », choisissez <strong>JSON</strong> pour l'historique (le format HTML proposé par défaut ne peut pas être importé).</li>
+                    <li>Créez l'export, téléchargez l'archive, décompressez-la, puis choisissez le fichier <code>watch-history.json</code>.</li>
+                </ol>
+                <p>Vos 500 vidéos les plus récentes rejoignent l'historique, et celles du fil sont masquées. Le fichier reste sur votre appareil.</p>
+                <button id="import-history" class="primary-button">Choisir le fichier watch-history.json</button>
+                <input type="file" id="import-file" accept=".json,application/json" hidden>
+            </details>
+
             <div id="history-list" class="history-list"></div>
         </section>
     </main>

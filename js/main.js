@@ -8,7 +8,9 @@ import {
     applyVideoDetails, buildFeed, keepChannels, matchesSearch, mergeChannelVideos, videosMissingDetails
 } from './feed.js';
 import { openGroupsModal, setupGroupsModal } from './groups.js';
-import { groupByDay, historyEntries, markWatched, unmarkWatched } from './history-model.js';
+import {
+    groupByDay, historyEntries, importWatches, markWatched, parseTakeoutHistory, unmarkWatched
+} from './history-model.js';
 import {
     clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
     getGuideCollapsed, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory, hasStoredSession,
@@ -432,6 +434,30 @@ function removeFromHistory(videoId) {
     });
 }
 
+// Google Takeout watch-history.json chosen: merge it into the history
+async function importTakeoutFile(file) {
+    let watches;
+    try {
+        watches = parseTakeoutHistory(JSON.parse(await file.text()));
+    } catch (error) {
+        console.error('Error reading Takeout file:', error);
+        showError('Ce fichier n\'est pas un historique YouTube au format JSON. Dans Google Takeout, choisissez le format JSON pour l\'historique.');
+        return;
+    }
+
+    const before = getWatchHistory();
+    const feedIds = new Set(buildFeed(getVideoCache()).map(video => video.videoId));
+    const { history, added } = importWatches(before, watches, getVideoCache());
+    const hidden = Object.keys(history).filter(id => feedIds.has(id) && !before[id]).length;
+
+    saveWatchHistory(history);
+    renderHistoryView();
+    renderVideoFeed();
+    showToast(added === 0
+        ? 'Aucune nouvelle vidéo à importer.'
+        : `${added} vidéo${added > 1 ? 's' : ''} importée${added > 1 ? 's' : ''} depuis YouTube, dont ${hidden} retirée${hidden > 1 ? 's' : ''} du fil.`);
+}
+
 function clearHistory() {
     if (Object.keys(getWatchHistory()).length === 0) return;
     if (!confirm('Effacer tout l\'historique ? Les vidéos réapparaîtront dans le fil.')) return;
@@ -540,6 +566,12 @@ function setupEventListeners() {
     // Feed / history navigation, and history actions
     window.addEventListener('hashchange', showViewFromHash);
     document.getElementById('clear-history')?.addEventListener('click', clearHistory);
+    const importFile = document.getElementById('import-file');
+    document.getElementById('import-history')?.addEventListener('click', () => importFile?.click());
+    importFile?.addEventListener('change', () => {
+        if (importFile.files[0]) importTakeoutFile(importFile.files[0]);
+        importFile.value = '';
+    });
 
     // Back on the tab after watching: hide the videos opened meanwhile
     document.addEventListener('visibilitychange', () => {

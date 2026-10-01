@@ -1,6 +1,10 @@
 // Watch history logic: pure functions on { videoId: { watchedAt, video } } (see tests/)
 
 import { MAX_HISTORY } from './config.js';
+import { isValidYouTubeId } from './feed.js';
+
+// "Vous avez regardé <titre>" / "Watched <title>": the prefix Takeout puts before titles
+const TAKEOUT_TITLE_PREFIX = /^(Vous avez regardé|Watched|Has visto|Hai guardato|Assistiu a|Angesehen:?)\s+/;
 
 // Fields of a feed video kept in the history, so it can be shown after leaving the cache
 function snapshot(video) {
@@ -27,6 +31,72 @@ export function unmarkWatched(history, videoId) {
 // History entries, most recently watched first
 export function historyEntries(history) {
     return Object.values(history).sort((a, b) => b.watchedAt - a.watchedAt);
+}
+
+// Watched videos from a Google Takeout "watch-history.json" (array of activity records).
+// Skips ads, removed videos and anything that is not a video. Throws if it is not such a file.
+// Returns [{ videoId, title, channelTitle, channelId, watchedAt }], one per video (latest watch)
+export function parseTakeoutHistory(records) {
+    if (!Array.isArray(records)) {
+        throw new Error('Not a Takeout watch history');
+    }
+
+    const latest = new Map();
+    records.forEach(record => {
+        if (!record || typeof record !== 'object' || record.details) return; // "details" marks ads
+
+        let videoId = null;
+        try {
+            const url = new URL(record.titleUrl);
+            videoId = url.pathname === '/watch' ? url.searchParams.get('v') : null;
+        } catch (error) {
+            return; // No link: removed video, survey, etc.
+        }
+
+        const watchedAt = Date.parse(record.time);
+        if (!isValidYouTubeId(videoId) || isNaN(watchedAt)) return;
+
+        const channel = Array.isArray(record.subtitles) ? record.subtitles[0] : null;
+        const channelId = /\/channel\/([\w-]+)/.exec(channel?.url || '')?.[1] || null;
+
+        const previous = latest.get(videoId);
+        if (!previous || previous.watchedAt < watchedAt) {
+            latest.set(videoId, {
+                videoId,
+                title: String(record.title || '').replace(TAKEOUT_TITLE_PREFIX, ''),
+                channelTitle: channel?.name || '',
+                channelId,
+                watchedAt
+            });
+        }
+    });
+
+    return [...latest.values()];
+}
+
+// Copy of the history with imported watches added; the most recent watch of a video wins,
+// and feed videos (videoCache) keep their full details. Returns { history, added }
+export function importWatches(history, watches, videoCache = {}) {
+    const cachedById = new Map();
+    Object.entries(videoCache).forEach(([channelId, videos]) => {
+        videos.forEach(video => cachedById.set(video.videoId, { ...video, channelId }));
+    });
+
+    const merged = { ...history };
+
+    watches.forEach(({ videoId, title, channelTitle, channelId, watchedAt }) => {
+        const existing = merged[videoId];
+        if (existing && existing.watchedAt >= watchedAt) return;
+
+        const video = cachedById.get(videoId) || existing?.video || {
+            videoId, title, channelTitle, channelId,
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+        };
+        merged[videoId] = { watchedAt, video: snapshot(video) };
+    });
+
+    const trimmed = trim(merged);
+    return { history: trimmed, added: Object.keys(trimmed).filter(id => !history[id]).length };
 }
 
 function startOfDay(timestamp) {

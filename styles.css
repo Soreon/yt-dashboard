@@ -623,6 +623,42 @@ body.guide-collapsed .page {
     font-weight: 700;
 }
 
+.import-help {
+    margin: 8px 0 8px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background-color: var(--chip);
+    color: var(--text-secondary);
+}
+
+.import-help summary {
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.import-help p,
+.import-help ol {
+    margin: 12px 0;
+}
+
+.import-help ol {
+    padding-left: 20px;
+}
+
+.import-help li {
+    margin-bottom: 4px;
+}
+
+.import-help a {
+    color: var(--cta);
+}
+
+.import-help code {
+    font-family: "Roboto Mono", monospace;
+    color: var(--text);
+}
+
 .history-day {
     font-size: 20px;
     line-height: 28px;
