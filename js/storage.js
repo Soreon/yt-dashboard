@@ -6,6 +6,7 @@ const VIDEOS_KEY = 'yt_video_cache';
 const LAST_SYNC_KEY = 'yt_last_sync';
 const GROUPS_KEY = 'yt_user_groups';
 const CHANNEL_NAMES_KEY = 'yt_channel_names';
+const CACHE_VERSION_KEY = 'yt_cache_version';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -102,4 +103,13 @@ export function getChannelNames() {
 
 export function saveChannelNames(names) {
     return writeJSON(CHANNEL_NAMES_KEY, names);
+}
+
+// Format version of the video cache (0 = written before versioning)
+export function getCacheVersion() {
+    return Number(readJSON(CACHE_VERSION_KEY, 0)) || 0;
+}
+
+export function saveCacheVersion(version) {
+    return writeJSON(CACHE_VERSION_KEY, version);
 }

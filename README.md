@@ -5,7 +5,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 ## Fonctionnalités
 
 - **Connexion Google** via Google Identity Services (OAuth 2.0, *token model*) : aucun secret côté serveur.
-- **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne.
+- **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts.
 - **Synchronisation** : au chargement si la dernière date de plus d'une heure, ou à la demande avec « Forcer la synchro ».
 - **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe.
 - **Cache local** : le fil s'affiche instantanément depuis le cache, y compris quand la session a expiré.
@@ -58,10 +58,11 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 Connexion (jeton OAuth)
   → subscriptions.list   tous les abonnements, 50 par page
   → channels.list        playlist « uploads » de chaque nouvelle chaîne, par lots de 50
-  → playlistItems.list   5 dernières vidéos de chaque chaîne, en parallèle
+  → playlistItems.list   5 dernières vidéos (hors Shorts) de chaque chaîne, en parallèle
   → fil trié par date, max 10 vidéos conservées par chaîne
 ```
 
+- **Shorts** : les vidéos sont lues dans la playlist « vidéos longues » de chaque chaîne (`UULF…`, déduite de la playlist des mises en ligne `UU…`), qui exclut les Shorts. Cette playlist n'est pas documentée par l'API : si elle renvoie une erreur 404 pour une chaîne, l'application se rabat sur toutes ses mises en ligne, Shorts compris.
 - Les chaînes dont vous vous êtes désabonné sont retirées des caches à chaque chargement des abonnements.
 - Une synchronisation n'est marquée comme faite que si au moins une chaîne a été récupérée : en cas d'échec, la suivante a lieu au prochain chargement.
 ### Organisation du code
@@ -98,6 +99,7 @@ npm test
 | `yt_video_cache` | ID de chaîne → dernières vidéos (ID, titre, chaîne, date, miniature) |
 | `yt_last_sync` | Date de la dernière synchronisation réussie |
 | `yt_user_groups` | Nom du groupe → liste d'ID de chaînes |
+| `yt_cache_version` | Version du format du cache (un cache plus ancien est reconstruit à la synchronisation suivante) |
 
 Pour repartir de zéro : `localStorage.clear()` dans la console du navigateur.
 
@@ -123,7 +125,6 @@ Exemple avec 200 abonnements : environ 4 unités par chargement, plus 200 unité
 ## Limites connues
 
 - Les groupes ne peuvent pas encore être modifiés ni supprimés depuis l'interface.
-- Les Shorts apparaissent dans le fil comme les autres vidéos.
 - Pas de synchronisation périodique tant que l'onglet reste ouvert : elle a lieu au chargement ou à la demande.
 
 ## Licence

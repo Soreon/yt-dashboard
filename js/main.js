@@ -1,19 +1,20 @@
 // Global Video Feed - entry point: authentication, loading and sync
 
 import { CLIENT_ID, SCOPES, SYNC_INTERVAL_MS } from './config.js';
-import { AuthError, fetchAllSubscriptions, fetchPlaylistVideos, fetchUploadsPlaylists } from './api.js';
-import { buildFeed, keepChannels, mergeChannelVideos, toCachedVideo } from './feed.js';
+import { AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchUploadsPlaylists } from './api.js';
+import { buildFeed, keepChannels, mergeChannelVideos } from './feed.js';
 import { openGroupsModal, setupGroupsModal } from './groups.js';
 import {
-    clearAuthData, getAuthData, getChannelNames, getLastSync, getPlaylistCache, getUserGroups,
-    getVideoCache, hasStoredSession, saveAuthData, saveChannelNames, saveLastSync,
-    savePlaylistCache, saveVideoCache
+    clearAuthData, getAuthData, getCacheVersion, getChannelNames, getLastSync, getPlaylistCache,
+    getUserGroups, getVideoCache, hasStoredSession, saveAuthData, saveCacheVersion, saveChannelNames,
+    saveLastSync, savePlaylistCache, saveVideoCache
 } from './storage.js';
 import {
     clearUI, renderFilterButtons, renderStats, renderVideoGrid, setLoading, showError, updateAuthUI
 } from './ui.js';
 
 const SECONDS_TO_MILLISECONDS = 1000;
+const CACHE_VERSION = 2; // 2: videos come from long-form playlists (no Shorts)
 
 let accessToken = null;
 let tokenClient = null;
@@ -129,21 +130,13 @@ function storeVideoCache(cache) {
     }
 }
 
-// Convert caches written by older versions, which stored full API items
-function migrateVideoCache() {
-    const cache = getVideoCache();
-    let migrated = false;
+// Older caches may hold Shorts or full API items: drop them so the next sync rebuilds them
+function upgradeVideoCache() {
+    if (getCacheVersion() >= CACHE_VERSION) return;
 
-    for (const channelId in cache) {
-        if (cache[channelId].some(video => video.snippet)) {
-            cache[channelId] = cache[channelId].map(video => video.snippet ? toCachedVideo(video) : video);
-            migrated = true;
-        }
-    }
-
-    if (migrated) {
-        storeVideoCache(cache);
-    }
+    storeVideoCache({});
+    saveLastSync(0);
+    saveCacheVersion(CACHE_VERSION);
 }
 
 // Forget channels the user is no longer subscribed to
@@ -194,7 +187,7 @@ async function syncAllChannels(force = false) {
     try {
         // Fetch videos from all playlists in parallel
         const results = await Promise.all(
-            channels.map(([, playlistId]) => fetchPlaylistVideos(playlistId, accessToken))
+            channels.map(([, playlistId]) => fetchLatestVideos(playlistId, accessToken))
         );
 
         // Every request failed: keep the previous timestamp so the next load retries
@@ -313,7 +306,7 @@ function showCachedFeed() {
 
 // Initialize application
 function initApp() {
-    migrateVideoCache();
+    upgradeVideoCache();
     setupEventListeners();
 
     // Show the cached feed right away, unless the user signed out

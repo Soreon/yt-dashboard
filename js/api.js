@@ -1,11 +1,20 @@
 // YouTube Data API v3, authenticated with the OAuth access token
 
 import { BATCH_SIZE, VIDEOS_PER_SYNC } from './config.js';
+import { longFormPlaylistId } from './feed.js';
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 // Raised when the access token is rejected (expired or revoked)
 export class AuthError extends Error {}
+
+// Raised on any other HTTP error
+class ApiError extends Error {
+    constructor(response) {
+        super(`API Error: ${response.status} ${response.statusText}`);
+        this.status = response.status;
+    }
+}
 
 // Authenticated GET on an API endpoint
 async function apiFetch(endpoint, params, token) {
@@ -23,7 +32,7 @@ async function apiFetch(endpoint, params, token) {
     }
 
     if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        throw new ApiError(response);
     }
 
     return response.json();
@@ -71,15 +80,26 @@ export async function fetchUploadsPlaylists(channelIds, token) {
     return playlists;
 }
 
-// Latest items of a playlist (null if the request failed)
-export async function fetchPlaylistVideos(playlistId, token) {
+// Latest items of a playlist
+async function fetchPlaylistItems(playlistId, token) {
+    const params = { part: 'snippet', playlistId, maxResults: String(VIDEOS_PER_SYNC) };
+    const data = await apiFetch('playlistItems', params, token);
+    return data.items || [];
+}
+
+// Latest videos of a channel without Shorts (null if the request failed)
+export async function fetchLatestVideos(uploadsPlaylistId, token) {
     try {
-        const params = { part: 'snippet', playlistId, maxResults: String(VIDEOS_PER_SYNC) };
-        const data = await apiFetch('playlistItems', params, token);
-        return data.items || [];
+        try {
+            return await fetchPlaylistItems(longFormPlaylistId(uploadsPlaylistId), token);
+        } catch (error) {
+            // No long-form playlist for this channel: fall back to all uploads, Shorts included
+            if (error.status !== 404) throw error;
+            return await fetchPlaylistItems(uploadsPlaylistId, token);
+        }
     } catch (error) {
         if (error instanceof AuthError) throw error;
-        console.error(`Error fetching playlist ${playlistId}:`, error);
+        console.error(`Error fetching playlist ${uploadsPlaylistId}:`, error);
         return null;
     }
 }

@@ -7,6 +7,12 @@ export function isValidYouTubeId(id) {
     return Boolean(id) && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
+// Playlist of a channel's long-form videos (no Shorts), derived from its uploads playlist:
+// UUxxxx → UULFxxxx. Not documented by the API, hence the fallback in fetchLatestVideos
+export function longFormPlaylistId(uploadsPlaylistId) {
+    return uploadsPlaylistId.startsWith('UU') ? `UULF${uploadsPlaylistId.slice(2)}` : uploadsPlaylistId;
+}
+
 // Keep only the fields the feed needs from a playlistItems API item
 export function toCachedVideo(item) {
     const snippet = item.snippet || {};

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { MAX_VIDEOS_PER_CHANNEL } from '../js/config.js';
 import {
-    buildFeed, getRelativeTime, isValidYouTubeId, keepChannels, mergeChannelVideos, toCachedVideo
+    buildFeed, getRelativeTime, isValidYouTubeId, keepChannels, longFormPlaylistId, mergeChannelVideos,
+    toCachedVideo
 } from '../js/feed.js';
 
 // playlistItems API item, as returned by the YouTube Data API
@@ -32,6 +33,11 @@ test('isValidYouTubeId accepts IDs and rejects anything else', () => {
     assert.equal(isValidYouTubeId(undefined), false);
     assert.equal(isValidYouTubeId('abc"><script>'), false);
     assert.equal(isValidYouTubeId('abc/def'), false);
+});
+
+test('longFormPlaylistId swaps the uploads prefix for the long-form one', () => {
+    assert.equal(longFormPlaylistId('UU_x5XG1OV2P6uZZ5FSM9Ttw'), 'UULF_x5XG1OV2P6uZZ5FSM9Ttw');
+    assert.equal(longFormPlaylistId('PLsomething'), 'PLsomething');
 });
 
 test('toCachedVideo keeps only the fields the feed needs', () => {
