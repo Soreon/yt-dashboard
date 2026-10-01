@@ -8,19 +8,38 @@ export function escapeHtml(text) {
     return String(text ?? '').replace(/[&<>"']/g, char => HTML_ESCAPES[char]);
 }
 
-// Show error message (toast)
-let errorTimeout = null;
-export function showError(message) {
-    const errorEl = document.getElementById('error-message');
-    if (errorEl) {
-        errorEl.textContent = message;
-        errorEl.style.display = 'block';
-        // Restart the timer so a new message is not hidden by an older one
-        clearTimeout(errorTimeout);
-        errorTimeout = setTimeout(() => {
-            errorEl.style.display = 'none';
-        }, 5000);
+// Show a message at the bottom left, optionally with an action button ({ label, onClick })
+let toastTimeout = null;
+export function showToast(message, action = null) {
+    const toastEl = document.getElementById('error-message');
+    if (!toastEl) return;
+
+    const text = document.createElement('span');
+    text.textContent = message;
+    toastEl.replaceChildren(text);
+
+    if (action) {
+        const button = document.createElement('button');
+        button.className = 'toast-action';
+        button.textContent = action.label;
+        button.addEventListener('click', () => {
+            toastEl.style.display = 'none';
+            action.onClick();
+        });
+        toastEl.appendChild(button);
     }
+
+    toastEl.style.display = 'flex';
+    // Restart the timer so a new message is not hidden by an older one
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+        toastEl.style.display = 'none';
+    }, 5000);
+}
+
+// Show error message (toast)
+export function showError(message) {
+    showToast(message);
     console.error(message);
 }
 
@@ -147,8 +166,39 @@ export function renderStats(subscriptionCount, videoCount) {
     if (videoCountEl) videoCountEl.textContent = videoCount;
 }
 
-// Render the video grid, or a message when there is nothing to show
-export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}) {
+const ICON_MARK_WATCHED = 'M22 5.18 10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44A9.9 9.9 0 0 0 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z';
+const ICON_MARK_UNWATCHED = 'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z';
+const ICON_REMOVE = 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z';
+
+function setIconButton(button, path, label) {
+    button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
+    button.setAttribute('aria-label', label);
+    button.title = label;
+}
+
+// Show a feed card as watched (dimmed, red bar) or not, and switch its button
+export function markCardWatched(card, watched) {
+    card.classList.toggle('watched', watched);
+    const button = card.querySelector('.card-action');
+    if (button) {
+        setIconButton(button, watched ? ICON_MARK_UNWATCHED : ICON_MARK_WATCHED,
+            watched ? 'Marquer comme non vue' : 'Marquer comme vue');
+    }
+}
+
+// Call onOpen(video, card) when a link to the video is followed (click, middle click, Enter)
+function onVideoLinkOpened(card, video, onOpen) {
+    card.querySelectorAll('a.thumbnail, a.video-title-link').forEach(link => {
+        link.addEventListener('click', () => onOpen(video, card));
+        link.addEventListener('auxclick', event => {
+            if (event.button === 1) onOpen(video, card);
+        });
+    });
+}
+
+// Render the video grid, or a message when there is nothing to show.
+// handlers: { onOpen(video, card), onToggleWatched(video, card) }
+export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}, handlers = {}) {
     const grid = document.getElementById('subscriptions-grid');
     if (!grid) return;
 
@@ -160,7 +210,67 @@ export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}) {
     }
 
     videos.forEach(video => {
-        grid.appendChild(createVideoCard(video, channelAvatars[video.channelId]));
+        const card = createVideoCard(video, channelAvatars[video.channelId]);
+
+        const action = document.createElement('button');
+        action.className = 'icon-button card-action';
+        action.addEventListener('click', () => handlers.onToggleWatched?.(video, card));
+        card.querySelector('.details').appendChild(action);
+        markCardWatched(card, false);
+
+        if (handlers.onOpen) onVideoLinkOpened(card, video, handlers.onOpen);
+        grid.appendChild(card);
+    });
+}
+
+// Render the history page: day headings, then one row per video.
+// handlers: { onOpen(video, card), onRemove(videoId) }
+export function renderHistory(dayGroups, emptyMessage, channelAvatars = {}, handlers = {}) {
+    const list = document.getElementById('history-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    if (dayGroups.length === 0) {
+        list.innerHTML = `<div class="no-videos">${escapeHtml(emptyMessage)}</div>`;
+        return;
+    }
+
+    dayGroups.forEach(({ label, entries }) => {
+        const heading = document.createElement('h2');
+        heading.className = 'history-day';
+        heading.textContent = label;
+        list.appendChild(heading);
+
+        entries.forEach(({ video }) => {
+            const card = createVideoCard(video, channelAvatars[video.channelId]);
+            card.classList.add('history-item', 'watched');
+
+            const remove = document.createElement('button');
+            remove.className = 'icon-button card-action';
+            setIconButton(remove, ICON_REMOVE, "Retirer de l'historique");
+            remove.addEventListener('click', () => handlers.onRemove?.(video.videoId));
+            card.appendChild(remove);
+
+            if (handlers.onOpen) onVideoLinkOpened(card, video, handlers.onOpen);
+            list.appendChild(card);
+        });
+    });
+}
+
+// Show the feed or the history page, and highlight it in the navigation
+export function setActiveView(view) {
+    document.getElementById('feed-view').hidden = view !== 'feed';
+    document.getElementById('history-view').hidden = view !== 'history';
+
+    document.querySelectorAll('.nav-link').forEach(link => {
+        const active = link.dataset.view === view;
+        link.classList.toggle('active', active);
+        if (active) {
+            link.setAttribute('aria-current', 'page');
+        } else {
+            link.removeAttribute('aria-current');
+        }
     });
 }
 
@@ -178,7 +288,7 @@ function createVideoCard(video, channelAvatar) {
         : `<span class="${className}">${content}</span>`;
 
     const duration = formatDuration(video.duration);
-    const stats = [formatViews(video.views), getRelativeTime(publishedAt)].filter(Boolean);
+    const stats = [formatViews(video.views), publishedAt && getRelativeTime(publishedAt)].filter(Boolean);
 
     const card = document.createElement('div');
     card.className = 'video-card';

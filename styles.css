@@ -567,6 +567,111 @@ body.guide-collapsed .page {
     margin: 0 4px;
 }
 
+/* Card button (mark as watched / remove from history): shown on hover, always on touch screens */
+.card-action {
+    flex-shrink: 0;
+    margin: -8px -8px 0 0;
+    opacity: 0;
+    color: var(--text);
+}
+
+.video-card:hover .card-action,
+.video-card:focus-within .card-action {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .card-action {
+        opacity: 1;
+    }
+}
+
+/* Watched: red bar under the thumbnail, as YouTube shows for videos already seen */
+.video-card.watched .thumbnail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background-color: var(--brand);
+}
+
+#feed-view .video-card.watched .thumbnail img,
+#feed-view .video-card.watched .meta {
+    opacity: 0.6;
+}
+
+/* --- HISTORY PAGE (list of watched videos, like YouTube's) --- */
+.history-page {
+    max-width: 1100px;
+    padding-top: 24px;
+}
+
+.history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.page-title {
+    font-size: 36px;
+    line-height: 50px;
+    font-weight: 700;
+}
+
+.history-day {
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 700;
+    margin: 24px 0 16px;
+}
+
+.history-item {
+    position: relative;
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.history-item .thumbnail {
+    width: 246px;
+    flex-shrink: 0;
+    border-radius: 8px;
+}
+
+.history-item .details {
+    flex: 1;
+    min-width: 0;
+    padding: 0 40px 0 0;
+}
+
+.history-item .channel-avatar {
+    display: none;
+}
+
+.history-item .video-title {
+    font-size: 18px;
+    line-height: 26px;
+    font-weight: 400;
+}
+
+.history-item .channel-name,
+.history-item .video-stats {
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.history-item > .card-action {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+}
+
 .no-videos {
     grid-column: 1 / -1;
     text-align: center;
@@ -602,6 +707,8 @@ body.guide-collapsed .page {
 
 /* --- TOAST (bottom-left, like YouTube notifications) --- */
 .toast {
+    align-items: center;
+    gap: 24px;
     position: fixed;
     left: 24px;
     bottom: 24px;
@@ -612,6 +719,30 @@ body.guide-collapsed .page {
     background-color: var(--toast-bg);
     color: var(--toast-text);
     box-shadow: var(--shadow);
+}
+
+.toast-action {
+    margin-left: auto;
+    padding: 0 8px;
+    height: 36px;
+    border-radius: 18px;
+    color: #3ea6ff; /* The toast is dark in the light theme, light in the dark theme */
+    font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+    .toast-action {
+        color: #065fd4;
+    }
+}
+
+.toast-action:hover {
+    background-color: rgba(128, 128, 128, 0.2);
+}
+
+/* --- PIVOT BAR (bottom navigation on phones) --- */
+.pivot-bar {
+    display: none;
 }
 
 /* --- BUTTONS --- */
@@ -908,6 +1039,47 @@ body.guide-collapsed .page {
     body.guide-collapsed .page {
         margin-left: 0;
     }
+
+    .pivot-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1000;
+        height: 48px;
+        display: flex;
+        background-color: var(--bg);
+        border-top: 1px solid var(--divider);
+    }
+
+    .pivot-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 10px;
+        line-height: 12px;
+        color: var(--text-secondary);
+    }
+
+    .pivot-item.active {
+        color: var(--text);
+    }
+
+    .pivot-item svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .page {
+        padding-bottom: 72px;
+    }
+
+    .toast {
+        bottom: 60px;
+    }
 }
 
 @media (max-width: 656px) {
@@ -959,7 +1131,34 @@ body.guide-collapsed .page {
     .toast {
         left: 12px;
         right: 12px;
-        bottom: 12px;
+        bottom: 60px;
         max-width: none;
+    }
+
+    .history-page {
+        padding: 12px 12px 0;
+    }
+
+    .page-title {
+        font-size: 24px;
+        line-height: 32px;
+    }
+
+    .history-item {
+        gap: 12px;
+    }
+
+    .history-item .thumbnail {
+        width: 160px;
+        border-radius: 8px;
+    }
+
+    .history-item .details {
+        padding: 0 32px 0 0;
+    }
+
+    .history-item .video-title {
+        font-size: 14px;
+        line-height: 20px;
     }
 }

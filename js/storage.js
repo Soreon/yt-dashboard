@@ -10,6 +10,7 @@ const CHANNEL_AVATARS_KEY = 'yt_channel_avatars';
 const CACHE_VERSION_KEY = 'yt_cache_version';
 const ACCOUNT_KEY = 'yt_account';
 const GUIDE_COLLAPSED_KEY = 'yt_guide_collapsed';
+const WATCH_HISTORY_KEY = 'yt_watch_history';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -137,6 +138,15 @@ export function getGuideCollapsed() {
 
 export function saveGuideCollapsed(collapsed) {
     return writeJSON(GUIDE_COLLAPSED_KEY, collapsed);
+}
+
+// Watched videos: { videoId: { watchedAt, video } }
+export function getWatchHistory() {
+    return readJSON(WATCH_HISTORY_KEY, {});
+}
+
+export function saveWatchHistory(history) {
+    return writeJSON(WATCH_HISTORY_KEY, history);
 }
 
 // Format version of the video cache (0 = written before versioning)

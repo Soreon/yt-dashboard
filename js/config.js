@@ -9,3 +9,4 @@ export const VIDEOS_PER_SYNC = 5; // Videos fetched per channel on each sync
 export const MAX_VIDEOS_PER_CHANNEL = 10; // Videos kept per channel in the cache
 export const SYNC_INTERVAL_MS = 30 * 60 * 1000; // Minimum delay between automatic syncs
 export const AUTO_SYNC_CHECK_MS = 5 * 60 * 1000; // How often an open tab checks whether to sync
+export const MAX_HISTORY = 500; // Watched videos kept in the history

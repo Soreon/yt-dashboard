@@ -22,7 +22,7 @@
             <button id="guide-button" class="icon-button guide-button" aria-label="Menu" title="Menu">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
             </button>
-            <a class="logo" href="./" aria-label="Global Video Feed, accueil">
+            <a class="logo" href="#" aria-label="Global Video Feed, accueil">
                 <svg class="logo-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8H6v7c0 1.1.9 2 2 2h9v-2H8V8zm12-5h-8c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 8h-8V7h8v4zM4 12H2v7c0 1.1.9 2 2 2h9v-2H4v-7z"/></svg>
                 <span class="logo-text">Global Video Feed</span>
             </a>
@@ -65,9 +65,13 @@
     </header>
 
     <nav class="guide" aria-label="Navigation principale">
-        <a class="guide-item active" href="./" aria-current="page">
+        <a class="guide-item nav-link active" href="#" data-view="feed" aria-current="page">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             <span class="guide-label">Accueil</span>
+        </a>
+        <a class="guide-item nav-link" href="#historique" data-view="history">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+            <span class="guide-label">Historique</span>
         </a>
         <p id="stats" class="guide-footer" style="display: none;">
             <span id="sub-count">0</span> abonnements · <span id="video-count">0</span> vidéos
@@ -80,12 +84,37 @@
     </button>
 
     <main class="page">
-        <div id="filters-bar" class="chips-bar" style="display: none;">
-            <div id="filter-buttons" class="chips"></div>
-        </div>
+        <section id="feed-view">
+            <div id="filters-bar" class="chips-bar" style="display: none;">
+                <div id="filter-buttons" class="chips"></div>
+            </div>
 
-        <div id="subscriptions-grid" class="video-grid"></div>
+            <div id="subscriptions-grid" class="video-grid"></div>
+        </section>
+
+        <section id="history-view" class="history-page" hidden>
+            <div class="history-header">
+                <h1 class="page-title">Historique</h1>
+                <button id="clear-history" class="secondary-button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    <span>Effacer tout l'historique</span>
+                </button>
+            </div>
+            <div id="history-list" class="history-list"></div>
+        </section>
     </main>
+
+    <!-- Bottom navigation on phones, like m.youtube.com -->
+    <nav class="pivot-bar" aria-label="Navigation">
+        <a class="pivot-item nav-link active" href="#" data-view="feed" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Accueil</span>
+        </a>
+        <a class="pivot-item nav-link" href="#historique" data-view="history">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+            <span>Historique</span>
+        </a>
+    </nav>
 
     <div id="error-message" class="toast" role="status" style="display: none;"></div>
 

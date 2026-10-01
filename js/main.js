@@ -8,15 +8,17 @@ import {
     applyVideoDetails, buildFeed, keepChannels, matchesSearch, mergeChannelVideos, videosMissingDetails
 } from './feed.js';
 import { openGroupsModal, setupGroupsModal } from './groups.js';
+import { groupByDay, historyEntries, markWatched, unmarkWatched } from './history-model.js';
 import {
     clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
-    getGuideCollapsed, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, hasStoredSession, saveAccount,
-    saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveGuideCollapsed, saveLastSync,
-    savePlaylistCache, saveVideoCache
+    getGuideCollapsed, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory, hasStoredSession,
+    saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveGuideCollapsed,
+    saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory
 } from './storage.js';
 import {
-    clearUI, hideNewVideosPill, renderAccount, renderFilterButtons, renderStats, renderVideoGrid, setLoading,
-    setSyncing, setupAccountMenu, showError, showNewVideosPill, updateAuthUI
+    clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderFilterButtons, renderHistory, renderStats,
+    renderVideoGrid, setActiveView, setLoading, setSyncing, setupAccountMenu, showError, showNewVideosPill, showToast,
+    updateAuthUI
 } from './ui.js';
 
 const SECONDS_TO_MILLISECONDS = 1000;
@@ -29,6 +31,8 @@ let tokenClient = null;
 let isSyncing = false;
 let activeGroup = null; // Group currently used to filter the feed (null = all)
 let searchQuery = ''; // Text typed in the search box
+let currentView = 'feed'; // 'feed' or 'history'
+let watchedSinceRender = false; // Videos opened since the last render, hidden when coming back
 
 // Initialize Google Identity Services
 function initializeGoogleAuth() {
@@ -234,7 +238,7 @@ async function syncAllChannels(force = false, { background = false } = {}) {
         console.log('Sync completed successfully');
 
         const hasNewVideos = buildFeed(updatedCache).some(video => !knownIds.has(video.videoId));
-        if (background && hasNewVideos && window.scrollY > SCROLLED_DOWN_PX) {
+        if (background && hasNewVideos && currentView === 'feed' && window.scrollY > SCROLLED_DOWN_PX) {
             showNewVideosPill(showNewVideos);
         } else {
             renderVideoFeed();
@@ -316,24 +320,124 @@ async function loadSubscriptions() {
     }
 }
 
-// Render video feed, filtered by the active group and the search box
+// Render video feed: unwatched videos, filtered by the active group and the search box
 function renderVideoFeed() {
     hideNewVideosPill();
+    watchedSinceRender = false;
 
     const channelIds = activeGroup ? (getUserGroups()[activeGroup] || []) : null;
-    const videos = buildFeed(getVideoCache(), channelIds).filter(video => matchesSearch(video, searchQuery));
+    const history = getWatchHistory();
+    const groupVideos = buildFeed(getVideoCache(), channelIds);
+    const unwatched = groupVideos.filter(video => !history[video.videoId]);
+    const videos = unwatched.filter(video => matchesSearch(video, searchQuery));
 
     renderStats(Object.keys(getChannelNames()).length, videos.length);
 
     let emptyMessage;
     if (searchQuery.trim()) {
         emptyMessage = `Aucune vidéo ne correspond à « ${searchQuery.trim()} ».`;
+    } else if (groupVideos.length > 0) {
+        emptyMessage = 'Vous êtes à jour : toutes les vidéos de ce fil ont été vues.';
     } else if (accessToken) {
         emptyMessage = "Aucune vidéo disponible. Cliquez sur l'icône de synchronisation pour récupérer les dernières vidéos.";
     } else {
         emptyMessage = 'Aucune vidéo disponible. Connectez-vous pour récupérer les dernières vidéos.';
     }
-    renderVideoGrid(videos, emptyMessage, getChannelAvatars());
+    renderVideoGrid(videos, emptyMessage, getChannelAvatars(), {
+        onOpen: openVideo,
+        onToggleWatched: toggleWatched
+    });
+}
+
+// History page: watched videos grouped by day, filtered by the search box
+function renderHistoryView() {
+    const entries = historyEntries(getWatchHistory()).filter(entry => matchesSearch(entry.video, searchQuery));
+    const emptyMessage = searchQuery.trim()
+        ? `Aucune vidéo de l'historique ne correspond à « ${searchQuery.trim()} ».`
+        : 'Les vidéos que vous ouvrez depuis le fil, ou que vous marquez comme vues, apparaissent ici.';
+
+    renderHistory(groupByDay(entries), emptyMessage, getChannelAvatars(), {
+        onOpen: openVideo,
+        onRemove: removeFromHistory
+    });
+}
+
+function renderView() {
+    if (currentView === 'history') {
+        renderHistoryView();
+    } else {
+        renderVideoFeed();
+    }
+}
+
+// Route: "#historique" shows the history page, anything else the feed
+function showViewFromHash() {
+    currentView = location.hash === '#historique' ? 'history' : 'feed';
+    setActiveView(currentView);
+
+    // Each page has its own search, like YouTube's history search
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.placeholder = currentView === 'history' ? 'Rechercher dans l\'historique' : 'Rechercher dans le fil';
+        searchInput.setAttribute('aria-label', searchInput.placeholder);
+    }
+    searchQuery = '';
+    renderView();
+    window.scrollTo(0, 0);
+}
+
+// A video was opened from a card: mark it watched. The card stays (dimmed) so the grid does not
+// move under the cursor while opening several videos; it is hidden at the next render
+function openVideo(video, card) {
+    saveWatchHistory(markWatched(getWatchHistory(), video, Date.now()));
+    if (currentView === 'feed') markCardWatched(card, true);
+    watchedSinceRender = true;
+}
+
+// Card button: mark as watched (hidden right away, with "Annuler"), or back to unwatched
+function toggleWatched(video, card) {
+    const history = getWatchHistory();
+
+    if (history[video.videoId]) {
+        saveWatchHistory(unmarkWatched(history, video.videoId));
+        markCardWatched(card, false);
+        return;
+    }
+
+    saveWatchHistory(markWatched(history, video, Date.now()));
+    renderVideoFeed();
+    showToast('Vidéo marquée comme vue', {
+        label: 'Annuler',
+        onClick: () => {
+            saveWatchHistory(unmarkWatched(getWatchHistory(), video.videoId));
+            renderVideoFeed();
+        }
+    });
+}
+
+function removeFromHistory(videoId) {
+    const history = getWatchHistory();
+    const entry = history[videoId];
+    if (!entry) return;
+
+    saveWatchHistory(unmarkWatched(history, videoId));
+    renderHistoryView();
+    showToast('Vidéo retirée de l\'historique', {
+        label: 'Annuler',
+        onClick: () => {
+            saveWatchHistory(markWatched(getWatchHistory(), entry.video, entry.watchedAt));
+            renderHistoryView();
+        }
+    });
+}
+
+function clearHistory() {
+    if (Object.keys(getWatchHistory()).length === 0) return;
+    if (!confirm('Effacer tout l\'historique ? Les vidéos réapparaîtront dans le fil.')) return;
+
+    saveWatchHistory({});
+    renderView();
 }
 
 // "Nouvelles vidéos" pill clicked (or scrolled back to the top): show them
@@ -392,6 +496,9 @@ function initApp() {
         renderAccount(getAccount());
         showCachedFeed();
     }
+    if (location.hash === '#historique') {
+        showViewFromHash();
+    }
 
     startAutoSync();
     waitForGoogleAuth();
@@ -427,7 +534,18 @@ function setupEventListeners() {
     const searchInput = document.getElementById('search-input');
     searchInput?.addEventListener('input', () => {
         searchQuery = searchInput.value;
-        renderVideoFeed();
+        renderView();
+    });
+
+    // Feed / history navigation, and history actions
+    window.addEventListener('hashchange', showViewFromHash);
+    document.getElementById('clear-history')?.addEventListener('click', clearHistory);
+
+    // Back on the tab after watching: hide the videos opened meanwhile
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && watchedSinceRender) {
+            renderView();
+        }
     });
     document.getElementById('search-form')?.addEventListener('submit', event => {
         event.preventDefault();
