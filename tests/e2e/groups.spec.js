@@ -106,7 +106,7 @@ test('a channel can be in several groups, added from the "Sans groupe" page or a
     await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne B']);
 
     const menu = await openRowMenu(page, 'Chaîne B');
-    await expect(menu.locator('.menu-item')).toHaveText(['Tech', 'Musique']);
+    await expect(menu.locator('.menu-item')).toHaveText(['Voir ses vidéos dans le fil', 'Tech', 'Musique']);
     await menu.locator('.menu-item', { hasText: 'Tech' }).click();
     await expect(rows(page)).toHaveCount(0);
     await expect(page.locator('#group-channels')).toContainText('Toutes vos chaînes sont dans au moins un groupe');
@@ -114,7 +114,7 @@ test('a channel can be in several groups, added from the "Sans groupe" page or a
     // In Tech, add Chaîne B to Musique too: it shows Musique as its other group
     await page.goto('/#groupe/Tech');
     const menuB = await openRowMenu(page, 'Chaîne B');
-    await expect(menuB.locator('.menu-item')).toHaveText(['Musique', 'Retirer de « Tech »']);
+    await expect(menuB.locator('.menu-item')).toHaveText(['Voir ses vidéos dans le fil', 'Musique', 'Retirer de « Tech »']);
     await menuB.locator('.menu-item', { hasText: 'Musique' }).click();
     await expect(rowOf(page, 'Chaîne B').locator('.mini-chip')).toHaveText(['Musique']);
     expect(await readStorage(page, 'yt_user_groups')).toEqual({ Tech: ['UC_A', 'UC_B'], Musique: ['UC_C', 'UC_B'] });
@@ -217,6 +217,60 @@ test('inactive channels are flagged, listed, and moved to Archive in one click',
     await expect(rows(page).first().locator('.mini-chip')).toHaveText(['Archive']);
     await expect(page.locator('#group-meta')).toContainText('1 déjà dans « Archive »');
     await expect(page.locator('#archive-all')).toBeHidden();
+});
+
+test('groups can be reordered and hidden from the feed filters', async ({ page }) => {
+    await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A'], Musique: ['UC_B'], Archive: ['UC_C'] } }, '/#groupes');
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Tech', 'Musique', 'Archive']);
+
+    // Archive goes up once, Tech cannot go up
+    const cardMenu = name => page.locator('.group-card-wrap', { has: page.locator('.group-card-title', { hasText: name }) }).locator('.card-menu');
+    await cardMenu('Tech').locator('summary').click();
+    await expect(cardMenu('Tech').locator('.menu-item', { hasText: 'Monter' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await cardMenu('Archive').locator('summary').click();
+    await cardMenu('Archive').locator('.menu-item', { hasText: 'Monter' }).click();
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Tech', 'Archive', 'Musique']);
+    expect(Object.keys(await readStorage(page, 'yt_user_groups'))).toEqual(['Tech', 'Archive', 'Musique']);
+    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Archive', 'Musique']);
+
+    // Hide Archive: no chip, but the group and its page stay
+    await cardMenu('Archive').locator('summary').click();
+    await cardMenu('Archive').locator('.menu-item', { hasText: 'Masquer dans le fil' }).click();
+    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Musique']);
+    await expect(cardMenu('Archive').locator('..')).toContainText('masqué du fil');
+    expect(await readStorage(page, 'yt_hidden_groups')).toEqual(['Archive']);
+    await page.goto('/#groupe/Archive');
+    await expect(rows(page)).toHaveCount(1);
+
+    // Renaming keeps it hidden; showing it again brings the chip back
+    await page.locator('#rename-group').click();
+    await page.locator('#rename-input').fill('Vieux');
+    await page.locator('#rename-form button[type="submit"]').click();
+    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Musique']);
+    expect(await readStorage(page, 'yt_hidden_groups')).toEqual(['Vieux']);
+    await page.goto('/#groupes');
+    await cardMenu('Vieux').locator('summary').click();
+    await cardMenu('Vieux').locator('.menu-item', { hasText: 'Afficher dans le fil' }).click();
+    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Vieux', 'Musique']);
+});
+
+test('the feed can be filtered on one channel from the groups page', async ({ page }) => {
+    await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A', 'UC_B'] } }, '/#groupe/Tech');
+    const menu = await openRowMenu(page, 'Chaîne B');
+    await menu.locator('.menu-item', { hasText: 'Voir ses vidéos dans le fil' }).click();
+
+    await expect(page.locator('#feed-view')).toBeVisible();
+    await expect(feedCards(page)).toHaveCount(5);
+    await expect(feedCards(page).locator('.channel-name')).toHaveText(Array(5).fill('Chaîne B'));
+    await expect(page.locator('.channel-chip')).toHaveText('Chaîne B');
+    await expect(page.locator('.filter-button.active')).toHaveCount(1);
+
+    // The × on the chip, or any group chip, drops the channel filter
+    await page.locator('.channel-chip').click();
+    await expect(page.locator('.channel-chip')).toHaveCount(0);
+    await expect(feedCards(page)).toHaveCount(15);
+    await expect(page.locator('.filter-button.active')).toHaveText('Tous');
 });
 
 test('an unknown group in the URL goes back to the overview', async ({ page }) => {

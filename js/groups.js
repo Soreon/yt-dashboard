@@ -3,11 +3,12 @@
 import { getRelativeTime, isValidYouTubeId, normalizeText } from './feed.js';
 import {
     addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels, isInactive,
-    mergeGroups, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup, ungroupedChannels,
-    upsertGroup
+    mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup,
+    ungroupedChannels, upsertGroup
 } from './groups-model.js';
 import {
-    getChannelAvatars, getChannelNames, getUserGroups, getVideoCache, getWatchHistory, saveUserGroups
+    getChannelAvatars, getChannelNames, getHiddenGroups, getUserGroups, getVideoCache, getWatchHistory,
+    saveHiddenGroups, saveUserGroups
 } from './storage.js';
 import { downloadJson, setAvatar, showError, showToast } from './ui.js';
 
@@ -16,7 +17,7 @@ const UNGROUPED = Symbol('ungrouped');
 const INACTIVE = Symbol('inactive');
 const ARCHIVE_GROUP = 'Archive';
 
-let handlers = { onGroupsChanged: () => {}, onShowFeed: () => {} };
+let handlers = { onGroupsChanged: () => {}, onShowFeed: () => {}, onShowChannelFeed: () => {} };
 let route = { view: 'overview' }; // { view: 'overview' | 'ungrouped' | 'inactive' } | { view: 'detail', name }
 let searchQuery = '';
 let renderedKey = null; // Which view was rendered last: a re-render of the same one keeps its forms open
@@ -45,7 +46,8 @@ export function groupHash(name) {
 }
 
 // Wire the page; onGroupsChanged({ from, to }) is called after a group is created (from: null),
-// renamed (from → to), changed (from = to) or deleted (to: null); onShowFeed(name) shows the feed of a group
+// renamed (from → to), changed (from = to) or deleted (to: null); onShowFeed(name) shows the feed of a group,
+// onShowChannelFeed(channelId, name) the feed of one channel
 export function setupGroupsPage(pageHandlers) {
     handlers = pageHandlers;
 
@@ -161,8 +163,15 @@ function renderOverview() {
         return;
     }
 
+    const hiddenGroups = getHiddenGroups();
+    const names = entries.map(([name]) => name);
+
     shown.forEach(([name, channelIds]) => {
         const { lastUpload, unwatched } = groupActivity(channelIds, videoCache, history);
+        const hidden = hiddenGroups.includes(name);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'group-card-wrap';
 
         const card = document.createElement('a');
         card.className = 'group-card';
@@ -187,7 +196,7 @@ function renderOverview() {
 
         const meta = document.createElement('p');
         meta.className = 'group-meta';
-        meta.textContent = plural(channelIds.length, 'chaîne');
+        meta.textContent = plural(channelIds.length, 'chaîne') + (hidden ? ' · masqué du fil' : '');
 
         const activity = document.createElement('p');
         activity.className = 'group-meta';
@@ -197,8 +206,46 @@ function renderOverview() {
         ].filter(Boolean).join(' · ');
 
         card.append(mosaic, title, meta, activity);
-        grid.appendChild(card);
+        wrap.append(card, createCardMenu(name, names.indexOf(name), names.length, hidden));
+        grid.appendChild(wrap);
     });
+}
+
+// Card menu: move the group among the filters, hide it from the feed
+function createCardMenu(name, index, count, hidden) {
+    const details = document.createElement('details');
+    details.className = 'row-menu card-menu';
+
+    const summary = document.createElement('summary');
+    summary.className = 'icon-button';
+    summary.setAttribute('aria-label', `Options de ${name}`);
+    summary.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_MORE}"/></svg>`;
+
+    const menu = document.createElement('div');
+    menu.className = 'menu row-menu-items';
+
+    const up = menuItem('Monter', () => reorderGroup(name, -1));
+    up.disabled = index === 0;
+    const down = menuItem('Descendre', () => reorderGroup(name, 1));
+    down.disabled = index === count - 1;
+    menu.append(up, down, menuItem(hidden ? 'Afficher dans le fil' : 'Masquer dans le fil', () => toggleHidden(name)));
+
+    details.append(summary, menu);
+    return details;
+}
+
+function reorderGroup(name, offset) {
+    saveUserGroups(moveGroup(getUserGroups(), name, offset));
+    handlers.onGroupsChanged({ from: name, to: name });
+    renderGroupsPage(route, searchQuery);
+}
+
+// A hidden group keeps its channels and its page, but has no chip among the feed filters
+function toggleHidden(name) {
+    const hidden = getHiddenGroups();
+    saveHiddenGroups(hidden.includes(name) ? hidden.filter(groupName => groupName !== name) : [...hidden, name]);
+    handlers.onGroupsChanged({ from: name, to: name });
+    renderGroupsPage(route, searchQuery);
 }
 
 function escapeText(text) {
@@ -348,6 +395,8 @@ function createRowMenu(channelId, channelName, target, groups) {
     const menu = document.createElement('div');
     menu.className = 'menu row-menu-items';
 
+    menu.appendChild(menuItem('Voir ses vidéos dans le fil', () => handlers.onShowChannelFeed(channelId, channelName)));
+
     const addable = Object.keys(groups).filter(groupName => !groups[groupName].includes(channelId));
     if (addable.length > 0) {
         const label = document.createElement('p');
@@ -434,6 +483,7 @@ function renameCurrentGroup(newName) {
     }
 
     saveUserGroups(result.groups);
+    saveHiddenGroups(getHiddenGroups().map(groupName => (groupName === from ? to : groupName)));
     handlers.onGroupsChanged({ from, to });
     location.hash = groupHash(to);
 }
@@ -442,6 +492,7 @@ function deleteGroup(name) {
     if (!confirm(`Supprimer le groupe « ${name} » ? Ses chaînes restent dans vos abonnements.`)) return;
 
     saveUserGroups(removeGroup(getUserGroups(), name));
+    saveHiddenGroups(getHiddenGroups().filter(groupName => groupName !== name));
     handlers.onGroupsChanged({ from: name, to: null });
     location.hash = '#groupes';
 }
@@ -544,7 +595,8 @@ function addSelectedChannels() {
 
 function exportGroupsFile() {
     const today = new Date().toISOString().slice(0, 10);
-    downloadJson(`groupes-global-video-feed-${today}.json`, exportGroups(getUserGroups(), getChannelNames(), Date.now()));
+    downloadJson(`groupes-global-video-feed-${today}.json`,
+        exportGroups(getUserGroups(), getChannelNames(), Date.now(), getHiddenGroups()));
 }
 
 // Groups file chosen: add its groups, and complete the ones with the same name
@@ -558,8 +610,15 @@ async function importGroupsFile(file) {
         return;
     }
 
-    const { groups, added, completed } = mergeGroups(getUserGroups(), incoming);
+    const before = getUserGroups();
+    const { groups, added, completed } = mergeGroups(before, incoming);
     saveUserGroups(groups);
+
+    // Groups hidden in the file stay hidden here, when they are new
+    const newlyHidden = incoming.filter(group => group.hidden && !before[group.name]).map(group => group.name);
+    if (newlyHidden.length > 0) {
+        saveHiddenGroups([...new Set([...getHiddenGroups(), ...newlyHidden])]);
+    }
     handlers.onGroupsChanged({ from: null, to: null });
     renderGroupsPage(route, searchQuery);
 

@@ -126,11 +126,12 @@ test('the automatic sync waits 30 minutes, and does not move the feed when scrol
 });
 
 test('an expired token stops the automatic sync without calling the API', async ({ page, youtube }) => {
-    await openApp(page, { yt_auth_token: validToken(2000), yt_cache_version: 2 });
+    // A token valid for a few seconds: long enough to load, short enough for the test
+    await openApp(page, { yt_auth_token: validToken(6000), yt_cache_version: 2 });
     await expect(feedCards(page)).toHaveCount(15);
     await waitForSync(page);
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(6000);
     const callsBefore = youtube.calls.length;
     await comeBackToTab(page);
 

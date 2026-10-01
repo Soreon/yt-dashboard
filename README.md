@@ -52,6 +52,7 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 - **Se connecter à YouTube** : autorise l'accès en lecture seule à vos abonnements (`youtube.readonly`). L'écran de consentement n'apparaît que la première fois.
 - **Synchroniser** (icône ⟳ en haut à droite) : récupère immédiatement les dernières vidéos.
 - **Groupes** (menu latéral, ou icône à côté de la synchro) : une carte par groupe, avec ses chaînes en mosaïque, le nombre de vidéos non vues et la date de sa dernière vidéo ; « Nouveau groupe » crée un groupe puis ouvre le choix des chaînes. Cliquer sur un groupe affiche ses chaînes (dernière vidéo, non-vues, autres groupes de la chaîne) ; chaque ligne a un menu « Ajouter à… » et « Retirer du groupe ». Une chaîne peut être dans plusieurs groupes. Le groupe se renomme, se supprime, et « Voir le fil » affiche le fil filtré dessus. « Sans groupe » liste les chaînes qui ne sont dans aucun groupe. Deux groupes ne peuvent pas porter le même nom ; un groupe renommé reste sélectionné dans les filtres.
+- **Ordre et visibilité des groupes** : le menu ⋮ d'une carte monte ou descend le groupe dans les filtres du fil, ou le **masque du fil** : il garde ses chaînes et sa page, mais n'a plus de pastille dans les filtres (pratique pour « Archive »). Le menu ⋮ d'une chaîne propose aussi « Voir ses vidéos dans le fil » : le fil ne montre alors que cette chaîne, avec une pastille à fermer pour revenir à tout.
 - **Chaînes inactives** : une chaîne dont la dernière vidéo connue a plus d'un an porte un badge « Inactive », et la page Groupes compte les inactives par groupe. « Inactives depuis plus d'un an » les liste toutes, de la plus récemment active à la plus ancienne, et « Tout déplacer vers Archive » les range dans un groupe « Archive » (créé au besoin) en les retirant de leurs autres groupes. L'activité est déduite des vidéos que l'application connaît : une chaîne jamais synchronisée n'est pas comptée.
 - **Exporter / importer les groupes** (page Groupes) : « Exporter » télécharge un fichier JSON avec vos groupes et le nom de leurs chaînes ; « Importer » l'ajoute aux groupes d'un autre appareil ou navigateur. Un groupe importé qui porte le nom d'un groupe existant le complète avec les chaînes qui lui manquent : rien n'est supprimé.
 - **Rechercher** : la barre du haut filtre la page affichée au fil de la frappe, sans tenir compte des accents ni des majuscules : le fil (titre ou chaîne), les groupes (nom du groupe ou d'une de ses chaînes) ou l'historique.
@@ -129,7 +130,8 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_channel_avatars` | ID de chaîne → URL de son avatar |
 | `yt_video_cache` | ID de chaîne → dernières vidéos (ID, titre, chaîne, date, miniature, durée, vues) |
 | `yt_last_sync` | Date de la dernière synchronisation réussie |
-| `yt_user_groups` | Nom du groupe → liste d'ID de chaînes |
+| `yt_user_groups` | Nom du groupe → liste d'ID de chaînes (l'ordre est celui des filtres) |
+| `yt_hidden_groups` | Noms des groupes masqués dans les filtres du fil |
 | `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
 | `yt_guide_collapsed` | Menu latéral réduit ou non |
 | `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus) |

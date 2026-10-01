@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
     addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels, isInactive,
-    mergeGroups, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup, ungroupedChannels,
-    upsertGroup
+    mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup,
+    ungroupedChannels, upsertGroup
 } from '../js/groups-model.js';
 
 const groups = { Tech: ['A', 'B'], Musique: ['C'], Jeux: ['D'] };
@@ -59,13 +59,23 @@ test('exportGroups writes each group with its channel names', () => {
     });
 });
 
-test('parseGroupsFile reads an exported file back', () => {
-    const file = exportGroups(groups, {}, Date.now());
+test('parseGroupsFile reads an exported file back, hidden groups included', () => {
+    const file = exportGroups(groups, {}, Date.now(), ['Jeux']);
+    assert.equal(file.groups[0].hidden, undefined);
+    assert.equal(file.groups[2].hidden, true);
     assert.deepEqual(parseGroupsFile(file), [
-        { name: 'Tech', channelIds: ['A', 'B'] },
-        { name: 'Musique', channelIds: ['C'] },
-        { name: 'Jeux', channelIds: ['D'] }
+        { name: 'Tech', hidden: false, channelIds: ['A', 'B'] },
+        { name: 'Musique', hidden: false, channelIds: ['C'] },
+        { name: 'Jeux', hidden: true, channelIds: ['D'] }
     ]);
+});
+
+test('moveGroup swaps a group with its neighbour, and ignores impossible moves', () => {
+    assert.deepEqual(Object.keys(moveGroup(groups, 'Jeux', -1)), ['Tech', 'Jeux', 'Musique']);
+    assert.deepEqual(Object.keys(moveGroup(groups, 'Tech', 1)), ['Musique', 'Tech', 'Jeux']);
+    assert.equal(moveGroup(groups, 'Tech', -1), groups);
+    assert.equal(moveGroup(groups, 'Jeux', 1), groups);
+    assert.equal(moveGroup(groups, 'Inconnu', 1), groups);
 });
 
 test('parseGroupsFile skips invalid groups and channels, and trims names', () => {
@@ -81,8 +91,8 @@ test('parseGroupsFile skips invalid groups and channels, and trims names', () =>
         ]
     };
     assert.deepEqual(parseGroupsFile(file), [
-        { name: 'Sport', channelIds: ['UC1'] },
-        { name: 'x'.repeat(60), channelIds: ['UC3'] }
+        { name: 'Sport', hidden: false, channelIds: ['UC1'] },
+        { name: 'x'.repeat(60), hidden: false, channelIds: ['UC3'] }
     ]);
 });
 

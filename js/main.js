@@ -13,7 +13,8 @@ import {
 } from './history-model.js';
 import {
     clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
-    getGuideCollapsed, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory, hasStoredSession,
+    getGuideCollapsed, getHiddenGroups, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory,
+    hasStoredSession,
     saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveGuideCollapsed,
     saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory
 } from './storage.js';
@@ -32,6 +33,7 @@ let tokenExpiresAt = 0;
 let tokenClient = null;
 let isSyncing = false;
 let activeGroup = null; // Group currently used to filter the feed (null = all)
+let activeChannel = null; // Channel the feed is filtered on, from the groups page: { id, name } or null
 let searchQuery = ''; // Text typed in the search box
 let currentView = 'feed'; // 'feed', 'groups' or 'history'
 let watchedSinceRender = false; // Videos opened since the last render, hidden when coming back
@@ -327,7 +329,7 @@ function renderVideoFeed() {
     hideNewVideosPill();
     watchedSinceRender = false;
 
-    const channelIds = activeGroup ? (getUserGroups()[activeGroup] || []) : null;
+    const channelIds = activeChannel ? [activeChannel.id] : activeGroup ? (getUserGroups()[activeGroup] || []) : null;
     const history = getWatchHistory();
     const groupVideos = buildFeed(getVideoCache(), channelIds);
     const unwatched = groupVideos.filter(video => !history[video.videoId]);
@@ -515,9 +517,25 @@ function startAutoSync() {
 
 // Render the filter buttons for the current groups
 function refreshFilterButtons() {
-    renderFilterButtons(Object.keys(getUserGroups()), activeGroup, groupName => {
-        activeGroup = groupName;
-        renderVideoFeed();
+    // Hidden groups have no chip, unless one is the active filter
+    const hidden = getHiddenGroups();
+    const groupNames = Object.keys(getUserGroups()).filter(name => !hidden.includes(name) || name === activeGroup);
+
+    renderFilterButtons({
+        groupNames,
+        activeGroup,
+        activeChannel,
+        onSelectGroup(groupName) {
+            activeGroup = groupName;
+            activeChannel = null;
+            refreshFilterButtons();
+            renderVideoFeed();
+        },
+        onClearChannel() {
+            activeChannel = null;
+            refreshFilterButtons();
+            renderVideoFeed();
+        }
     });
 }
 
@@ -605,12 +623,22 @@ function setupEventListeners() {
             if (from !== null && activeGroup === from) {
                 activeGroup = to;
             }
+            if (activeGroup && getHiddenGroups().includes(activeGroup)) {
+                activeGroup = null;
+            }
             refreshFilterButtons();
             if (currentView === 'feed') renderVideoFeed();
         },
         // "Voir le fil" on a group: the feed, filtered on it
         onShowFeed(groupName) {
             activeGroup = groupName;
+            activeChannel = null;
+            refreshFilterButtons();
+            location.hash = '';
+        },
+        // "Voir ses vidéos dans le fil" on a channel
+        onShowChannelFeed(channelId, name) {
+            activeChannel = { id: channelId, name };
             refreshFilterButtons();
             location.hash = '';
         }

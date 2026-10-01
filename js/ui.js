@@ -326,8 +326,9 @@ function createVideoCard(video, channelAvatar) {
     return card;
 }
 
-// Render the filter chips ("Tous" + one per group); onSelect(groupName or null)
-export function renderFilterButtons(groupNames, activeGroup, onSelect) {
+// Render the filter chips: "Tous", one per group, and the channel filter when one is active.
+// onSelectGroup(groupName or null) on a chip, onClearChannel() on the channel chip
+export function renderFilterButtons({ groupNames, activeGroup, activeChannel, onSelectGroup, onClearChannel }) {
     const filterContainer = document.getElementById('filter-buttons');
     if (!filterContainer) return;
 
@@ -339,13 +340,20 @@ export function renderFilterButtons(groupNames, activeGroup, onSelect) {
     const entries = [['Tous', null], ...groupNames.map(name => [name, name])];
     entries.forEach(([label, groupName]) => {
         const button = document.createElement('button');
-        button.className = groupName === activeGroup ? 'chip filter-button active' : 'chip filter-button';
+        const active = !activeChannel && groupName === activeGroup;
+        button.className = active ? 'chip filter-button active' : 'chip filter-button';
         button.textContent = label;
-        button.onclick = () => {
-            filterContainer.querySelectorAll('.filter-button').forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            onSelect(groupName);
-        };
+        button.onclick = () => onSelectGroup(groupName);
         filterContainer.appendChild(button);
     });
+
+    if (activeChannel) {
+        const chip = document.createElement('button');
+        chip.className = 'chip filter-button channel-chip active';
+        chip.title = 'Retirer le filtre';
+        chip.innerHTML = '<span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+        chip.querySelector('span').textContent = activeChannel.name;
+        chip.onclick = onClearChannel;
+        filterContainer.appendChild(chip);
+    }
 }

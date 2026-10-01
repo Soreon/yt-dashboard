@@ -11,6 +11,7 @@ const CACHE_VERSION_KEY = 'yt_cache_version';
 const ACCOUNT_KEY = 'yt_account';
 const GUIDE_COLLAPSED_KEY = 'yt_guide_collapsed';
 const WATCH_HISTORY_KEY = 'yt_watch_history';
+const HIDDEN_GROUPS_KEY = 'yt_hidden_groups';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -138,6 +139,16 @@ export function getGuideCollapsed() {
 
 export function saveGuideCollapsed(collapsed) {
     return writeJSON(GUIDE_COLLAPSED_KEY, collapsed);
+}
+
+// Names of the groups hidden from the feed filters
+export function getHiddenGroups() {
+    const hidden = readJSON(HIDDEN_GROUPS_KEY, []);
+    return Array.isArray(hidden) ? hidden : [];
+}
+
+export function saveHiddenGroups(names) {
+    return writeJSON(HIDDEN_GROUPS_KEY, names);
 }
 
 // Watched videos: { videoId: { watchedAt, video } }

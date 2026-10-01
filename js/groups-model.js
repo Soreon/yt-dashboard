@@ -35,6 +35,17 @@ export function removeGroup(groups, name) {
     return Object.fromEntries(Object.entries(groups).filter(([groupName]) => groupName !== name));
 }
 
+// Copy of the groups with one moved up (offset -1) or down (+1) among the filters
+export function moveGroup(groups, name, offset) {
+    const entries = Object.entries(groups);
+    const index = entries.findIndex(([groupName]) => groupName === name);
+    const target = index + offset;
+    if (index === -1 || target < 0 || target >= entries.length) return groups;
+
+    [entries[index], entries[target]] = [entries[target], entries[index]];
+    return Object.fromEntries(entries);
+}
+
 // Rename a group, keeping its channels and its position
 export function renameGroup(groups, from, to) {
     return upsertGroup(groups, { originalName: from, name: to, channelIds: groups[from] || [] });
@@ -114,20 +125,22 @@ export function groupActivity(channelIds, videoCache, history) {
     }, { lastUpload: null, unwatched: 0 });
 }
 
-// Content of a groups file: each group with its channels (ID, and name so the file is readable)
-export function exportGroups(groups, channelNames, exportedAt) {
+// Content of a groups file: each group with its channels (ID, and name so the file is readable),
+// and whether it is hidden from the feed filters
+export function exportGroups(groups, channelNames, exportedAt, hiddenGroups = []) {
     return {
         format: EXPORT_FORMAT,
         version: 1,
         exportedAt: new Date(exportedAt).toISOString(),
         groups: Object.entries(groups).map(([name, channelIds]) => ({
             name,
+            ...(hiddenGroups.includes(name) ? { hidden: true } : {}),
             channels: channelIds.map(id => ({ id, name: channelNames[id] || '' }))
         }))
     };
 }
 
-// Groups of an exported file: [{ name, channelIds }]. Throws if it is not such a file;
+// Groups of an exported file: [{ name, channelIds, hidden }]. Throws if it is not such a file;
 // skips groups without a name or without a valid channel
 export function parseGroupsFile(data) {
     if (!data || data.format !== EXPORT_FORMAT || !Array.isArray(data.groups)) {
@@ -137,6 +150,7 @@ export function parseGroupsFile(data) {
     return data.groups
         .map(group => ({
             name: String(group?.name ?? '').trim().slice(0, MAX_GROUP_NAME_LENGTH),
+            hidden: group?.hidden === true,
             channelIds: [...new Set((Array.isArray(group?.channels) ? group.channels : [])
                 .map(channel => channel?.id)
                 .filter(id => typeof id === 'string' && isValidYouTubeId(id)))]
