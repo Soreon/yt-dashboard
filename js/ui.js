@@ -58,7 +58,7 @@ export function updateAuthUI(isAuthenticated) {
 }
 
 // Fill an avatar element with an image, or the first letter of the name as a fallback
-function setAvatar(element, url, name) {
+export function setAvatar(element, url, name) {
     if (!element) return;
 
     const initial = (name || '?').trim().charAt(0);

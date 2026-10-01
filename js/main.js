@@ -387,7 +387,14 @@ function setupEventListeners() {
         searchInput?.blur();
     });
 
-    setupGroupsModal(refreshFilterButtons);
+    // Keep the active filter on a renamed group, drop it if the group was deleted
+    setupGroupsModal(({ from, to }) => {
+        if (from !== null && activeGroup === from) {
+            activeGroup = to;
+        }
+        refreshFilterButtons();
+        renderVideoFeed();
+    });
 }
 
 // Start the application when DOM is ready

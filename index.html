@@ -84,7 +84,7 @@
 
     <div id="error-message" class="toast" role="status" style="display: none;"></div>
 
-    <!-- Groups Management Modal -->
+    <!-- Groups Management Modal: list of groups, or the editor of one group -->
     <div id="groups-modal" class="modal" style="display: none;">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="groups-modal-title">
             <div class="modal-header">
@@ -93,18 +93,35 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
                 </button>
             </div>
-            <div class="modal-body">
+
+            <div id="groups-list-view" class="modal-body">
+                <ul id="groups-list" class="groups-list"></ul>
+            </div>
+
+            <div id="group-editor" class="modal-body" hidden>
                 <div class="form-group">
                     <label for="group-name">Nom du groupe</label>
-                    <input type="text" id="group-name" class="text-field" placeholder="Ex : Tech, Musique, Jeux vidéo…">
+                    <input type="text" id="group-name" class="text-field" placeholder="Ex : Tech, Musique, Jeux vidéo…" maxlength="60">
                 </div>
                 <div class="form-group">
-                    <label>Chaînes</label>
+                    <label for="channel-search">Chaînes · <span id="selected-count">aucune sélectionnée</span></label>
+                    <input type="search" id="channel-search" class="text-field channel-search" placeholder="Rechercher une chaîne" autocomplete="off">
                     <div id="channel-list" class="channel-list"></div>
                 </div>
             </div>
+
             <div class="modal-footer">
-                <button id="save-group" class="primary-button">Créer le groupe</button>
+                <div id="list-actions" class="footer-actions">
+                    <button id="new-group" class="primary-button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        <span>Nouveau groupe</span>
+                    </button>
+                </div>
+                <div id="editor-actions" class="footer-actions" hidden>
+                    <button id="delete-group" class="text-button danger-button" hidden>Supprimer</button>
+                    <button id="cancel-group" class="secondary-button">Annuler</button>
+                    <button id="save-group" class="primary-button">Créer le groupe</button>
+                </div>
             </div>
         </div>
     </div>

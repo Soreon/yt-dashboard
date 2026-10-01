@@ -49,7 +49,7 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 
 - **Se connecter à YouTube** : autorise l'accès en lecture seule à vos abonnements (`youtube.readonly`). L'écran de consentement n'apparaît que la première fois.
 - **Synchroniser** (icône ⟳ en haut à droite) : récupère immédiatement les dernières vidéos.
-- **Gérer les groupes** (icône à côté) : nommez un groupe, cochez ses chaînes, puis « Créer le groupe ». Réutiliser un nom existant remplace le groupe.
+- **Gérer les groupes** (icône à côté) : liste de vos groupes, avec « Nouveau groupe », la modification (nom et chaînes) et la suppression. La recherche de l'éditeur retrouve vite une chaîne parmi vos abonnements. Deux groupes ne peuvent pas porter le même nom ; un groupe renommé reste sélectionné dans les filtres.
 - **Rechercher** : la barre du haut filtre le fil au fil de la frappe (titre ou chaîne, sans tenir compte des accents ni des majuscules).
 - **Menu** (☰) : réduit ou déplie le menu latéral ; le choix est mémorisé.
 - **Filtres** : « Tous » ou un groupe. Le filtre choisi est conservé après une synchronisation.
@@ -82,7 +82,8 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/storage.js](js/storage.js) | Lecture et écriture du `localStorage` |
 | [js/feed.js](js/feed.js) | Logique pure du fil (fusion, tri, dates), sans DOM : testée unitairement |
 | [js/ui.js](js/ui.js) | Affichage du fil, des filtres, du compte et des messages |
-| [js/groups.js](js/groups.js) | Fenêtre de gestion des groupes |
+| [js/groups.js](js/groups.js) | Fenêtre de gestion des groupes (liste et éditeur) |
+| [js/groups-model.js](js/groups-model.js) | Création, renommage et suppression de groupes, sans DOM : testée unitairement |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
 
@@ -132,7 +133,6 @@ Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 22
 
 ## Limites connues
 
-- Les groupes ne peuvent pas encore être modifiés ni supprimés depuis l'interface.
 - Pas de synchronisation périodique tant que l'onglet reste ouvert : elle a lieu au chargement ou à la demande.
 
 ## Licence
