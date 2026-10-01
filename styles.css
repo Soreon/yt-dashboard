@@ -153,18 +153,21 @@ button.secondary-button:hover,
     border-radius: var(--border-radius);
     overflow: hidden;
     transition: var(--transition);
-    cursor: pointer;
     display: flex;
     flex-direction: column;
     border: 1px solid transparent;
     position: relative;
+    color: inherit;
+    text-decoration: none;
 }
 
-/* Effet de bordure rouge au survol (comme sur l'image) */
-.video-card:hover {
+/* Effet de bordure rouge au survol (comme sur l'image), et au clavier */
+a.video-card:hover,
+a.video-card:focus-visible {
     transform: translateY(-6px);
     border-color: var(--primary-color);
     box-shadow: var(--primary-glow);
+    outline: none;
     z-index: 2;
 }
 

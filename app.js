@@ -662,18 +662,20 @@ function createVideoCard(video) {
     const title = video.title || 'Sans titre';
     const channelTitle = video.channelTitle || 'Chaîne inconnue';
 
-    const card = document.createElement('div');
+    // A real link: middle-click, "open in new tab", copy link and keyboard all work
+    const hasLink = videoId && isValidYouTubeId(videoId);
+    const card = document.createElement(hasLink ? 'a' : 'div');
     card.className = 'video-card';
-    
-    if (videoId && isValidYouTubeId(videoId)) {
-        card.onclick = () => {
-            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-        };
+
+    if (hasLink) {
+        card.href = `https://www.youtube.com/watch?v=${videoId}`;
+        card.target = '_blank';
+        card.rel = 'noopener noreferrer';
     }
-    
-    // Structure modifiée pour le nouveau CSS
+
+    // Structure modifiée pour le nouveau CSS (miniature décorative : le titre est déjà dans le lien)
     card.innerHTML = `
-        <img class="video-thumbnail" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(title)}" loading="lazy">
+        <img class="video-thumbnail" src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
         <div class="video-info">
             <div class="video-title">${escapeHtml(title)}</div>
             <div class="video-meta-row">
