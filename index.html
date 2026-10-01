@@ -143,6 +143,17 @@
             </div>
 
             <div id="groups-list-view" class="modal-body">
+                <div class="groups-toolbar">
+                    <button id="export-groups" class="secondary-button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                        <span>Exporter</span>
+                    </button>
+                    <button id="import-groups" class="secondary-button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                        <span>Importer</span>
+                    </button>
+                    <input type="file" id="import-groups-file" accept=".json,application/json" hidden>
+                </div>
                 <ul id="groups-list" class="groups-list"></ul>
             </div>
 

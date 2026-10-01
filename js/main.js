@@ -585,6 +585,7 @@ function setupEventListeners() {
     });
 
     // Keep the active filter on a renamed group, drop it if the group was deleted
+    // (from: null for a created or imported group)
     setupGroupsModal(({ from, to }) => {
         if (from !== null && activeGroup === from) {
             activeGroup = to;
