@@ -12,6 +12,7 @@ const ACCOUNT_KEY = 'yt_account';
 const GUIDE_COLLAPSED_KEY = 'yt_guide_collapsed';
 const WATCH_HISTORY_KEY = 'yt_watch_history';
 const HIDDEN_GROUPS_KEY = 'yt_hidden_groups';
+const WATCHED_IDS_KEY = 'yt_watched_ids';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -149,6 +150,17 @@ export function getHiddenGroups() {
 
 export function saveHiddenGroups(names) {
     return writeJSON(HIDDEN_GROUPS_KEY, names);
+}
+
+// IDs of every video ever watched or imported, to hide them from the feed (the detailed
+// history below is capped, this list is not)
+export function getWatchedIds() {
+    const ids = readJSON(WATCHED_IDS_KEY, []);
+    return Array.isArray(ids) ? ids : [];
+}
+
+export function saveWatchedIds(ids) {
+    return writeJSON(WATCHED_IDS_KEY, ids);
 }
 
 // Watched videos: { videoId: { watchedAt, video } }

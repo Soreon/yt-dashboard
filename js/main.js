@@ -9,14 +9,15 @@ import {
 } from './feed.js';
 import { groupsRouteFromHash, renderGroupsPage, setupGroupsPage } from './groups.js';
 import {
-    groupByDay, historyEntries, importWatches, markWatched, parseTakeoutHistory, unmarkWatched
+    groupByDay, historyEntries, importWatches, markWatched, parseTakeoutHistory, unmarkWatched, watchedLookup
 } from './history-model.js';
+import { readZipText } from './zip.js';
 import {
     clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
     getGuideCollapsed, getHiddenGroups, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory,
-    hasStoredSession,
+    getWatchedIds, hasStoredSession,
     saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveGuideCollapsed,
-    saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory
+    saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory, saveWatchedIds
 } from './storage.js';
 import {
     clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderFilterButtons, renderHistory, renderStats,
@@ -330,9 +331,9 @@ function renderVideoFeed() {
     watchedSinceRender = false;
 
     const channelIds = activeChannel ? [activeChannel.id] : activeGroup ? (getUserGroups()[activeGroup] || []) : null;
-    const history = getWatchHistory();
+    const watched = watchedLookup(getWatchHistory(), getWatchedIds());
     const groupVideos = buildFeed(getVideoCache(), channelIds);
-    const unwatched = groupVideos.filter(video => !history[video.videoId]);
+    const unwatched = groupVideos.filter(video => !watched[video.videoId]);
     const videos = unwatched.filter(video => matchesSearch(video, searchQuery));
 
     renderStats(Object.keys(getChannelNames()).length, videos.length);
@@ -406,30 +407,40 @@ function showViewFromHash() {
     window.scrollTo(0, 0);
 }
 
+// Record a watch: in the detailed history, and in the full list of watched IDs
+function recordWatch(video, watchedAt) {
+    saveWatchHistory(markWatched(getWatchHistory(), video, watchedAt));
+    const ids = getWatchedIds();
+    if (!ids.includes(video.videoId)) saveWatchedIds([...ids, video.videoId]);
+}
+
+function forgetWatch(videoId) {
+    saveWatchHistory(unmarkWatched(getWatchHistory(), videoId));
+    saveWatchedIds(getWatchedIds().filter(id => id !== videoId));
+}
+
 // A video was opened from a card: mark it watched. The card stays (dimmed) so the grid does not
 // move under the cursor while opening several videos; it is hidden at the next render
 function openVideo(video, card) {
-    saveWatchHistory(markWatched(getWatchHistory(), video, Date.now()));
+    recordWatch(video, Date.now());
     if (currentView === 'feed') markCardWatched(card, true);
     watchedSinceRender = true;
 }
 
 // Card button: mark as watched (hidden right away, with "Annuler"), or back to unwatched
 function toggleWatched(video, card) {
-    const history = getWatchHistory();
-
-    if (history[video.videoId]) {
-        saveWatchHistory(unmarkWatched(history, video.videoId));
+    if (watchedLookup(getWatchHistory(), getWatchedIds())[video.videoId]) {
+        forgetWatch(video.videoId);
         markCardWatched(card, false);
         return;
     }
 
-    saveWatchHistory(markWatched(history, video, Date.now()));
+    recordWatch(video, Date.now());
     renderVideoFeed();
     showToast('Vidéo marquée comme vue', {
         label: 'Annuler',
         onClick: () => {
-            saveWatchHistory(unmarkWatched(getWatchHistory(), video.videoId));
+            forgetWatch(video.videoId);
             renderVideoFeed();
         }
     });
@@ -440,34 +451,51 @@ function removeFromHistory(videoId) {
     const entry = history[videoId];
     if (!entry) return;
 
-    saveWatchHistory(unmarkWatched(history, videoId));
+    forgetWatch(videoId);
     renderHistoryView();
     showToast('Vidéo retirée de l\'historique', {
         label: 'Annuler',
         onClick: () => {
-            saveWatchHistory(markWatched(getWatchHistory(), entry.video, entry.watchedAt));
+            recordWatch(entry.video, entry.watchedAt);
             renderHistoryView();
         }
     });
 }
 
-// Google Takeout watch-history.json chosen: merge it into the history
+// Text of the watch history in a Takeout file: the JSON itself, or the archive that holds it
+async function readTakeoutHistory(file) {
+    const isZip = /\.zip$/i.test(file.name) || file.type === 'application/zip' || file.type === 'application/x-zip-compressed';
+    if (!isZip) return file.text();
+
+    const text = await readZipText(await file.arrayBuffer(), name => /watch-history\.json$/i.test(name));
+    if (text === null) {
+        throw new Error('No watch-history.json in the archive');
+    }
+    return text;
+}
+
+// Google Takeout export chosen (watch-history.json, or the .zip archive): merge it into the history
 async function importTakeoutFile(file) {
     let watches;
     try {
-        watches = parseTakeoutHistory(JSON.parse(await file.text()));
+        watches = parseTakeoutHistory(JSON.parse(await readTakeoutHistory(file)));
     } catch (error) {
         console.error('Error reading Takeout file:', error);
-        showError('Ce fichier n\'est pas un historique YouTube au format JSON. Dans Google Takeout, choisissez le format JSON pour l\'historique.');
+        showError(/\.zip$/i.test(file.name)
+            ? 'L\'archive ne contient pas de fichier watch-history.json. Dans Google Takeout, exportez l\'historique YouTube au format JSON.'
+            : 'Ce fichier n\'est pas un historique YouTube au format JSON. Dans Google Takeout, choisissez le format JSON pour l\'historique.');
         return;
     }
 
-    const before = getWatchHistory();
+    // Every watched video hides from the feed; the detailed history keeps the most recent ones
+    const watchedBefore = new Set([...getWatchedIds(), ...Object.keys(getWatchHistory())]);
+    const newIds = [...new Set(watches.map(watch => watch.videoId))].filter(id => !watchedBefore.has(id));
     const feedIds = new Set(buildFeed(getVideoCache()).map(video => video.videoId));
-    const { history, added } = importWatches(before, watches, getVideoCache());
-    const hidden = Object.keys(history).filter(id => feedIds.has(id) && !before[id]).length;
+    const hidden = newIds.filter(id => feedIds.has(id)).length;
+    const added = newIds.length;
 
-    saveWatchHistory(history);
+    saveWatchedIds([...new Set([...getWatchedIds(), ...watches.map(watch => watch.videoId)])]);
+    saveWatchHistory(importWatches(getWatchHistory(), watches, getVideoCache()).history);
     renderHistoryView();
     renderVideoFeed();
     showToast(added === 0
@@ -480,6 +508,7 @@ function clearHistory() {
     if (!confirm('Effacer tout l\'historique ? Les vidéos réapparaîtront dans le fil.')) return;
 
     saveWatchHistory({});
+    saveWatchedIds([]);
     renderView();
 }
 

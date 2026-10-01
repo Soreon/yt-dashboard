@@ -6,9 +6,10 @@ import {
     mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup,
     ungroupedChannels, upsertGroup
 } from './groups-model.js';
+import { watchedLookup } from './history-model.js';
 import {
     getChannelAvatars, getChannelNames, getHiddenGroups, getUserGroups, getVideoCache, getWatchHistory,
-    saveHiddenGroups, saveUserGroups
+    getWatchedIds, saveHiddenGroups, saveUserGroups
 } from './storage.js';
 import { downloadJson, setAvatar, showError, showToast } from './ui.js';
 
@@ -141,7 +142,7 @@ function renderOverview() {
     const channelNames = getChannelNames();
     const channelAvatars = getChannelAvatars();
     const videoCache = getVideoCache();
-    const history = getWatchHistory();
+    const history = watchedLookup(getWatchHistory(), getWatchedIds());
     const entries = Object.entries(groups);
 
     $('export-groups').disabled = entries.length === 0;
@@ -261,7 +262,7 @@ function renderChannelsView(target) {
     const channelNames = getChannelNames();
     const channelAvatars = getChannelAvatars();
     const videoCache = getVideoCache();
-    const history = getWatchHistory();
+    const history = watchedLookup(getWatchHistory(), getWatchedIds());
     const ungrouped = target === UNGROUPED;
     const inactive = target === INACTIVE;
 

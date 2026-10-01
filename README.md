@@ -59,7 +59,7 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 - **Menu** (☰) : réduit ou déplie le menu latéral ; le choix est mémorisé.
 - **Vidéos vues** : ouvrir une vidéo (clic, clic molette) la marque comme vue. Sa carte reste affichée, grisée avec une barre rouge, pour ne pas décaler la grille pendant que vous en ouvrez plusieurs ; elle disparaît du fil quand vous revenez sur l'onglet. Le bouton ✓ d'une carte (au survol) la marque comme vue tout de suite, avec « Annuler » ; sur une carte grisée, il la remet en non vue.
 - **Historique** (menu latéral, ou barre du bas sur téléphone) : les vidéos vues, des plus récentes aux plus anciennes, regroupées par jour. La barre de recherche y filtre l'historique. La croix d'une vidéo la retire de l'historique (elle revient dans le fil) ; « Effacer tout l'historique » vide la liste. Les 500 dernières vidéos vues sont conservées.
-- **Importer votre historique YouTube** (page Historique) : l'API YouTube ne donne pas accès à l'historique, mais Google Takeout permet de l'exporter. Sur https://takeout.google.com/, ne sélectionnez que « YouTube et YouTube Music », ne gardez que l'historique, et choisissez le format **JSON** pour l'historique dans « Formats multiples » (le HTML proposé par défaut n'est pas pris en charge). Importez ensuite le fichier `watch-history.json` de l'archive : vos 500 vidéos les plus récentes rejoignent l'historique avec leur date de visionnage, et celles présentes dans le fil en sont retirées. Réimporter un export plus récent ne crée pas de doublon. Le fichier est lu dans le navigateur et n'est envoyé nulle part.
+- **Importer votre historique YouTube** (page Historique) : l'API YouTube ne donne pas accès à l'historique, mais Google Takeout permet de l'exporter. Sur https://takeout.google.com/, ne sélectionnez que « YouTube et YouTube Music », ne gardez que l'historique, et choisissez le format **JSON** pour l'historique dans « Formats multiples » (le HTML proposé par défaut n'est pas pris en charge). Choisissez ensuite l'archive `.zip` téléchargée telle quelle (ou le fichier `watch-history.json` qu'elle contient) : toutes les vidéos regardées sont retirées du fil, et les 500 plus récentes rejoignent l'historique avec leur date de visionnage. Réimporter un export plus récent ne crée pas de doublon ; Takeout peut programmer un export tous les deux mois. Le fichier est lu dans le navigateur (décompression native, sans dépendance) et n'est envoyé nulle part.
 - **Filtres** : « Tous » ou un groupe. Le filtre choisi est conservé après une synchronisation.
 - **Synchronisation automatique** : toutes les 5 minutes et à chaque retour sur l'onglet, l'application synchronise si la dernière synchronisation date de plus de 30 minutes. Si de nouvelles vidéos arrivent alors que vous êtes descendu dans le fil, une pastille « Nouvelles vidéos » les affiche au lieu de déplacer la page.
 - **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché et la synchronisation automatique s'arrête. Cliquez sur « Se connecter » pour reprendre.
@@ -93,6 +93,7 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/ui.js](js/ui.js) | Affichage du fil, des filtres, du compte et des messages |
 | [js/groups.js](js/groups.js) | Page Groupes : vue d'ensemble, détail d'un groupe, chaînes sans groupe |
 | [js/history-model.js](js/history-model.js) | Vidéos vues, regroupement par jour et import Google Takeout, sans DOM : testée unitairement |
+| [js/zip.js](js/zip.js) | Lecture d'une entrée d'archive zip avec la décompression native du navigateur : testée unitairement |
 | [js/groups-model.js](js/groups-model.js) | Création, renommage, ajout et retrait de chaînes, activité des groupes, export et import, sans DOM : testée unitairement |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
@@ -134,7 +135,8 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_hidden_groups` | Noms des groupes masqués dans les filtres du fil |
 | `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
 | `yt_guide_collapsed` | Menu latéral réduit ou non |
-| `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus) |
+| `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus, pour la page Historique) |
+| `yt_watched_ids` | Identifiants de toutes les vidéos vues ou importées, sans limite, pour les masquer du fil |
 | `yt_cache_version` | Version du format du cache (un cache plus ancien est reconstruit à la synchronisation suivante) |
 
 Pour repartir de zéro : `localStorage.clear()` dans la console du navigateur.

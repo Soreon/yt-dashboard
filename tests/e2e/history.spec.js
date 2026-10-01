@@ -1,4 +1,5 @@
 import { comeBackToTab, expect, feedCards, feedTitles, openApp, readStorage, signedIn, test } from './fixtures.js';
+import { buildZip } from '../zip-builder.js';
 
 const HOUR = 3600 * 1000;
 const historyItems = page => page.locator('#history-list .history-item .video-title');
@@ -103,4 +104,36 @@ test('imports a Google Takeout history and hides the imported feed videos', asyn
 
     await page.goto('/');
     await expect(feedCards(page)).toHaveCount(13);
+    expect((await readStorage(page, 'yt_watched_ids')).sort()).toEqual(['UC_A_v0', 'UC_B_v1', 'dQw4w9WgXcQ']);
+});
+
+test('imports the Takeout archive itself, and keeps every watched video even beyond the history cap', async ({ page }) => {
+    const now = Date.now();
+    // 600 old watches on channels not in the feed, plus one feed video: more than the 500 kept in the history
+    const records = Array.from({ length: 600 }, (_, i) => ({
+        header: 'YouTube', title: `Vous avez regardé Ancienne ${i}`, titleUrl: `https://www.youtube.com/watch?v=old${String(i).padStart(8, '0')}`,
+        time: new Date(now - (i + 2) * 24 * HOUR).toISOString(), products: ['YouTube']
+    }));
+    records.push({ header: 'YouTube', title: 'Vous avez regardé Vidéo 1 de UC_A', titleUrl: 'https://www.youtube.com/watch?v=UC_A_v0', time: new Date(now - 700 * 24 * HOUR).toISOString(), products: ['YouTube'] });
+    const zip = buildZip({
+        'Takeout/archive_browser.html': '<html></html>',
+        'Takeout/YouTube et YouTube Music/historique/watch-history.json': JSON.stringify(records)
+    });
+
+    await page.goto('/#historique');
+    await page.locator('#import-file').setInputFiles({ name: 'takeout-20261001.zip', mimeType: 'application/zip', buffer: zip });
+
+    await expect(page.locator('#error-message')).toHaveText('601 vidéos importées depuis YouTube, dont 1 retirée du fil.');
+    expect(Object.keys(await readStorage(page, 'yt_watch_history'))).toHaveLength(500);
+    expect(await readStorage(page, 'yt_watched_ids')).toHaveLength(601);
+    expect(await readStorage(page, 'yt_watched_ids')).toContain('UC_A_v0'); // The oldest watch, out of the history, still hides
+
+    await page.goto('/');
+    await expect(feedCards(page)).toHaveCount(14);
+    await expect(feedTitles(page)).not.toContainText(['Vidéo 1 de UC_A']);
+
+    // A zip without the history, or with an HTML export, is refused with a hint
+    await page.goto('/#historique');
+    await page.locator('#import-file').setInputFiles({ name: 'takeout.zip', mimeType: 'application/zip', buffer: buildZip({ 'Takeout/historique/watch-history.html': '<html></html>' }) });
+    await expect(page.locator('#error-message')).toContainText('ne contient pas de fichier watch-history.json');
 });

@@ -18,6 +18,14 @@ function trim(history) {
     return Object.fromEntries(entries.slice(0, MAX_HISTORY));
 }
 
+// Lookup usable as `watched[videoId]`: the detailed history plus the full list of watched IDs
+export function watchedLookup(history, watchedIds) {
+    const lookup = Object.create(null);
+    watchedIds.forEach(id => { lookup[id] = true; });
+    Object.assign(lookup, history);
+    return lookup;
+}
+
 // Copy of the history with the video marked as watched at the given time
 export function markWatched(history, video, watchedAt) {
     return trim({ ...history, [video.videoId]: { watchedAt, video: snapshot(video) } });

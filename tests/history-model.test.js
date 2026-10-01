@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { MAX_HISTORY } from '../js/config.js';
 import {
-    dayLabel, groupByDay, historyEntries, importWatches, markWatched, parseTakeoutHistory, unmarkWatched
+    dayLabel, groupByDay, historyEntries, importWatches, markWatched, parseTakeoutHistory, unmarkWatched, watchedLookup
 } from '../js/history-model.js';
 
 function video(videoId, extra = {}) {
@@ -135,4 +135,11 @@ test('importWatches keeps the most recent watch of a video already in the histor
     const updated = importWatches(older, watches).history.cooking1234;
     assert.equal(updated.watchedAt, Date.parse('2026-09-29T12:00:00Z'));
     assert.equal(updated.video.title, 'Local', 'known details are kept');
+});
+
+test('watchedLookup answers for the detailed history and the full ID list', () => {
+    const lookup = watchedLookup(markWatched({}, video('v1'), 1), ['v1', 'old9']);
+    assert.ok(lookup.v1 && lookup.old9);
+    assert.equal(lookup.other, undefined);
+    assert.equal(lookup.v1.watchedAt, 1, 'history entries keep their details');
 });
