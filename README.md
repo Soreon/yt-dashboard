@@ -111,6 +111,12 @@ npm run test:e2e
 
 En local, les tests utilisent le Google Chrome installé (pas de téléchargement de navigateur) ; en intégration continue, le Chromium de Playwright (`npx playwright install chromium`).
 
+### Intégration continue et déploiement
+
+Le workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) lance les tests unitaires et les tests de bout en bout à chaque push et à chaque pull request. Sur `main`, le site n'est déployé sur GitHub Pages que si tous les tests passent ; seuls les fichiers du site sont publiés (`index.html`, `styles.css`, `favicon.svg`, `js/`). Un nouveau fichier nécessaire au site doit être ajouté à la liste de l'étape « Collect the site files ».
+
+Cela suppose que GitHub Pages soit configuré pour être déployé par le workflow : **Settings → Pages → Build and deployment → Source : GitHub Actions**.
+
 ### Données stockées (localStorage)
 
 | Clé | Contenu |
