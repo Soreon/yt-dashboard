@@ -17,9 +17,9 @@ test.beforeEach(async ({ page }) => {
 test('creates a group, refuses a duplicate name and filters the feed', async ({ page }) => {
     await page.locator('#manage-groups-button').click();
 
-    // No group yet: an empty list, but the subscriptions can already be exported
+    // No group yet: an empty list, nothing to export
     await expect(page.locator('#groups-list')).toContainText('Aucun groupe');
-    await expect(page.locator('#export-groups')).toBeEnabled();
+    await expect(page.locator('#export-groups')).toBeDisabled();
     await page.locator('#new-group').click();
     await expect(page.locator('#groups-modal-title')).toHaveText('Nouveau groupe');
     await expect(page.locator('#delete-group')).toBeHidden();
@@ -90,9 +90,6 @@ test('exports the groups to a file that imports them back on another device', as
     expect(file.groups).toEqual([
         { name: 'Tech', channels: [{ id: 'UC_A', name: 'Chaîne A' }, { id: 'UC_B', name: 'Chaîne B' }] },
         { name: 'Musique', channels: [{ id: 'UC_C', name: 'Chaîne C' }] }
-    ]);
-    expect(file.subscriptions).toEqual([
-        { id: 'UC_A', name: 'Chaîne A' }, { id: 'UC_B', name: 'Chaîne B' }, { id: 'UC_C', name: 'Chaîne C' }
     ]);
 
     // Another device: an empty browser, with one group already named like an imported one
