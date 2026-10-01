@@ -96,11 +96,20 @@ La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
 
 ### Tests
 
-Les tests unitaires utilisent l'exécuteur intégré à Node.js (version 18 ou plus), sans dépendance à installer :
+**Tests unitaires** de la logique pure (`tests/*.test.js`), avec l'exécuteur intégré à Node.js (version 20 ou plus), sans dépendance :
 
 ```bash
 npm test
 ```
+
+**Tests de bout en bout** (`tests/e2e/`), avec [Playwright](https://playwright.dev) : l'application est servie localement et pilotée dans un vrai navigateur, tandis que Google Identity Services et l'API YouTube sont simulés par interception réseau (aucune requête ne sort, aucun compte n'est nécessaire). Ils couvrent la synchronisation, les sessions, les groupes, l'historique, l'import Takeout, la recherche, l'affichage mobile et l'échappement des titres.
+
+```bash
+npm install          # une fois
+npm run test:e2e
+```
+
+En local, les tests utilisent le Google Chrome installé (pas de téléchargement de navigateur) ; en intégration continue, le Chromium de Playwright (`npx playwright install chromium`).
 
 ### Données stockées (localStorage)
 

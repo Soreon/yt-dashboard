@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # IDE
 .claude/
@@ -26,3 +25,7 @@ temp/
 # Build artifacts
 dist/
 build/
+
+# Playwright
+playwright-report/
+test-results/
