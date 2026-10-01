@@ -1,0 +1,9 @@
+{
+  "name": "yt-dashboard",
+  "private": true,
+  "type": "module",
+  "description": "Global Video Feed: a single feed of the latest videos from your YouTube subscriptions",
+  "scripts": {
+    "test": "node --test"
+  }
+}

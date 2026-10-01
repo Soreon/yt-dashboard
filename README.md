@@ -25,7 +25,7 @@ Aucune clé API n'est nécessaire : toutes les requêtes passent par le jeton OA
 
 ### 2. Configurer l'application
 
-Dans [app.js](app.js), remplacez `CLIENT_ID` par votre identifiant :
+Dans [js/config.js](js/config.js), remplacez `CLIENT_ID` par votre identifiant :
 
 ```js
 const CLIENT_ID = '123456789-abc....apps.googleusercontent.com';
@@ -64,7 +64,29 @@ Connexion (jeton OAuth)
 
 - Les chaînes dont vous vous êtes désabonné sont retirées des caches à chaque chargement des abonnements.
 - Une synchronisation n'est marquée comme faite que si au moins une chaîne a été récupérée : en cas d'échec, la suivante a lieu au prochain chargement.
-- Tout le code est dans [app.js](app.js) ; la mise en page est dans [index.html](index.html) et [styles.css](styles.css).
+### Organisation du code
+
+Modules JavaScript natifs, chargés directement par le navigateur, sans étape de build :
+
+| Fichier | Rôle |
+| --- | --- |
+| [js/main.js](js/main.js) | Point d'entrée : connexion, chargement des abonnements, synchronisation |
+| [js/config.js](js/config.js) | Client ID OAuth et constantes |
+| [js/api.js](js/api.js) | Appels à l'API YouTube Data v3 |
+| [js/storage.js](js/storage.js) | Lecture et écriture du `localStorage` |
+| [js/feed.js](js/feed.js) | Logique pure du fil (fusion, tri, dates), sans DOM : testée unitairement |
+| [js/ui.js](js/ui.js) | Affichage du fil, des filtres et des messages |
+| [js/groups.js](js/groups.js) | Fenêtre de gestion des groupes |
+
+La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
+
+### Tests
+
+Les tests unitaires utilisent l'exécuteur intégré à Node.js (version 18 ou plus), sans dépendance à installer :
+
+```bash
+npm test
+```
 
 ### Données stockées (localStorage)
 
