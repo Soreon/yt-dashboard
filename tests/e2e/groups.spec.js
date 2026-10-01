@@ -91,6 +91,9 @@ test('exports the groups to a file that imports them back on another device', as
         { name: 'Tech', channels: [{ id: 'UC_A', name: 'Chaîne A' }, { id: 'UC_B', name: 'Chaîne B' }] },
         { name: 'Musique', channels: [{ id: 'UC_C', name: 'Chaîne C' }] }
     ]);
+    expect(file.subscriptions).toEqual([
+        { id: 'UC_A', name: 'Chaîne A' }, { id: 'UC_B', name: 'Chaîne B' }, { id: 'UC_C', name: 'Chaîne C' }
+    ]);
 
     // Another device: an empty browser, with one group already named like an imported one
     const other = await browser.newContext({ baseURL: test.info().project.use.baseURL });

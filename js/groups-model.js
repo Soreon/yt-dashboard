@@ -39,7 +39,8 @@ export function removeGroup(groups, name) {
     return Object.fromEntries(Object.entries(groups).filter(([groupName]) => groupName !== name));
 }
 
-// Content of a groups file: each group with its channels (ID, and name so the file is readable)
+// Content of a groups file: each group with its channels (ID, and name so the file is readable),
+// and the list of all subscribed channels, e.g. to plan groups outside the app
 export function exportGroups(groups, channelNames, exportedAt) {
     return {
         format: EXPORT_FORMAT,
@@ -48,7 +49,10 @@ export function exportGroups(groups, channelNames, exportedAt) {
         groups: Object.entries(groups).map(([name, channelIds]) => ({
             name,
             channels: channelIds.map(id => ({ id, name: channelNames[id] || '' }))
-        }))
+        })),
+        subscriptions: Object.entries(channelNames)
+            .map(([id, name]) => ({ id, name }))
+            .sort((a, b) => a.name.localeCompare(b.name))
     };
 }
 

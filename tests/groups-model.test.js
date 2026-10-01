@@ -42,13 +42,15 @@ test('removeGroup deletes only the given group', () => {
     assert.deepEqual(removeGroup(groups, 'Inconnu'), groups);
 });
 
-test('exportGroups writes each group with its channel names', () => {
-    const file = exportGroups({ Tech: ['UC1', 'UC2'] }, { UC1: 'Chaîne 1' }, Date.parse('2026-10-01T12:00:00Z'));
+test('exportGroups writes each group with its channel names, and all subscriptions', () => {
+    const names = { UC3: 'Zèbre', UC1: 'Chaîne 1', UC4: 'abeille' };
+    const file = exportGroups({ Tech: ['UC1', 'UC2'] }, names, Date.parse('2026-10-01T12:00:00Z'));
     assert.deepEqual(file, {
         format: 'global-video-feed-groups',
         version: 1,
         exportedAt: '2026-10-01T12:00:00.000Z',
-        groups: [{ name: 'Tech', channels: [{ id: 'UC1', name: 'Chaîne 1' }, { id: 'UC2', name: '' }] }]
+        groups: [{ name: 'Tech', channels: [{ id: 'UC1', name: 'Chaîne 1' }, { id: 'UC2', name: '' }] }],
+        subscriptions: [{ id: 'UC4', name: 'abeille' }, { id: 'UC1', name: 'Chaîne 1' }, { id: 'UC3', name: 'Zèbre' }]
     });
 });
 
