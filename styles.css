@@ -576,6 +576,30 @@ body.guide-collapsed .page {
     line-height: 22px;
 }
 
+/* "Nouvelles vidéos" pill, shown when a background sync brings videos while scrolled down */
+.new-videos-pill {
+    position: fixed;
+    top: calc(var(--masthead-height) + 64px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1500;
+    height: 36px;
+    padding: 0 16px 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 18px;
+    background-color: var(--cta);
+    color: #ffffff;
+    font-weight: 500;
+    box-shadow: var(--shadow);
+}
+
+.new-videos-pill svg {
+    width: 20px;
+    height: 20px;
+}
+
 /* --- TOAST (bottom-left, like YouTube notifications) --- */
 .toast {
     position: fixed;

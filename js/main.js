@@ -1,6 +1,6 @@
 // Global Video Feed - entry point: authentication, loading and sync
 
-import { CLIENT_ID, SCOPES, SYNC_INTERVAL_MS } from './config.js';
+import { AUTO_SYNC_CHECK_MS, CLIENT_ID, SCOPES, SYNC_INTERVAL_MS } from './config.js';
 import {
     AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchMyChannel, fetchUploadsPlaylists, fetchVideoDetails
 } from './api.js';
@@ -15,14 +15,16 @@ import {
     savePlaylistCache, saveVideoCache
 } from './storage.js';
 import {
-    clearUI, renderAccount, renderFilterButtons, renderStats, renderVideoGrid, setLoading, setSyncing,
-    setupAccountMenu, showError, updateAuthUI
+    clearUI, hideNewVideosPill, renderAccount, renderFilterButtons, renderStats, renderVideoGrid, setLoading,
+    setSyncing, setupAccountMenu, showError, showNewVideosPill, updateAuthUI
 } from './ui.js';
 
 const SECONDS_TO_MILLISECONDS = 1000;
 const CACHE_VERSION = 2; // 2: videos come from long-form playlists (no Shorts)
+const SCROLLED_DOWN_PX = 200; // Below this scroll, new videos are shown right away
 
 let accessToken = null;
+let tokenExpiresAt = 0;
 let tokenClient = null;
 let isSyncing = false;
 let activeGroup = null; // Group currently used to filter the feed (null = all)
@@ -61,12 +63,13 @@ function handleAuthResponse(response) {
     }
 
     accessToken = response.access_token;
+    tokenExpiresAt = Date.now() + (response.expires_in * SECONDS_TO_MILLISECONDS);
 
     // Save with expiration timestamp
     saveAuthData({
         access_token: response.access_token,
         expires_in: response.expires_in,
-        expires_at: Date.now() + (response.expires_in * SECONDS_TO_MILLISECONDS)
+        expires_at: tokenExpiresAt
     });
 
     updateAuthUI(true);
@@ -102,6 +105,7 @@ function restoreSession() {
     // Token is still valid, restore session
     if (Date.now() < authData.expires_at) {
         accessToken = authData.access_token;
+        tokenExpiresAt = authData.expires_at;
         updateAuthUI(true);
         loadSubscriptions();
     }
@@ -166,8 +170,9 @@ async function updatePlaylistCache(channelIds) {
     savePlaylistCache({ ...cache, ...playlists });
 }
 
-// Smart Sync: Fetch videos from all channels
-async function syncAllChannels(force = false) {
+// Smart Sync: Fetch videos from all channels.
+// A background sync does not move the feed under a user who scrolled down: it offers a pill instead
+async function syncAllChannels(force = false, { background = false } = {}) {
     if (isSyncing) {
         console.log('Sync skipped: already in progress');
         return;
@@ -207,6 +212,7 @@ async function syncAllChannels(force = false) {
 
         // Merge results into cache
         const videoCache = getVideoCache();
+        const knownIds = new Set(buildFeed(videoCache).map(video => video.videoId));
         results.forEach((videos, index) => {
             if (!videos || videos.length === 0) return;
 
@@ -221,12 +227,18 @@ async function syncAllChannels(force = false) {
         const details = await fetchVideoDetails(detailIds, accessToken);
 
         // Save updated cache and timestamp
-        storeVideoCache(applyVideoDetails(videoCache, details));
+        const updatedCache = applyVideoDetails(videoCache, details);
+        storeVideoCache(updatedCache);
         saveLastSync(now);
 
         console.log('Sync completed successfully');
 
-        renderVideoFeed();
+        const hasNewVideos = buildFeed(updatedCache).some(video => !knownIds.has(video.videoId));
+        if (background && hasNewVideos && window.scrollY > SCROLLED_DOWN_PX) {
+            showNewVideosPill(showNewVideos);
+        } else {
+            renderVideoFeed();
+        }
         refreshFilterButtons();
 
     } catch (error) {
@@ -306,6 +318,8 @@ async function loadSubscriptions() {
 
 // Render video feed, filtered by the active group and the search box
 function renderVideoFeed() {
+    hideNewVideosPill();
+
     const channelIds = activeGroup ? (getUserGroups()[activeGroup] || []) : null;
     const videos = buildFeed(getVideoCache(), channelIds).filter(video => matchesSearch(video, searchQuery));
 
@@ -320,6 +334,38 @@ function renderVideoFeed() {
         emptyMessage = 'Aucune vidéo disponible. Connectez-vous pour récupérer les dernières vidéos.';
     }
     renderVideoGrid(videos, emptyMessage, getChannelAvatars());
+}
+
+// "Nouvelles vidéos" pill clicked (or scrolled back to the top): show them
+function showNewVideos() {
+    renderVideoFeed();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Automatic sync while the tab is visible and the session valid (throttled by SYNC_INTERVAL_MS)
+function autoSync() {
+    if (!accessToken || document.visibilityState !== 'visible') return;
+
+    // The token cannot be renewed without a click: switch to "Se connecter" instead of calling the API
+    if (Date.now() >= tokenExpiresAt) {
+        handleSessionExpired();
+        return;
+    }
+
+    syncAllChannels(false, { background: true });
+}
+
+// Check periodically and when the user comes back to the tab
+function startAutoSync() {
+    setInterval(autoSync, AUTO_SYNC_CHECK_MS);
+    document.addEventListener('visibilitychange', autoSync);
+
+    // Back at the top of the page with new videos pending: show them
+    window.addEventListener('scroll', () => {
+        if (window.scrollY < 50 && !document.getElementById('new-videos-pill')?.hidden) {
+            renderVideoFeed();
+        }
+    }, { passive: true });
 }
 
 // Render the filter buttons for the current groups
@@ -347,6 +393,7 @@ function initApp() {
         showCachedFeed();
     }
 
+    startAutoSync();
     waitForGoogleAuth();
 }
 

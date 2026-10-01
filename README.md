@@ -6,7 +6,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 
 - **Connexion Google** via Google Identity Services (OAuth 2.0, *token model*) : aucun secret côté serveur.
 - **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts.
-- **Synchronisation** : au chargement si la dernière date de plus d'une heure, ou à la demande.
+- **Synchronisation** : au chargement, puis automatiquement tant que l'onglet est ouvert (au plus toutes les 30 minutes), ou à la demande.
 - **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe.
 - **Recherche** dans le fil, par titre ou nom de chaîne.
 - **Interface inspirée de YouTube** : mêmes codes de mise en page (cartes avec durée, vues et avatar de la chaîne, filtres en pastilles, menu latéral), thème clair ou sombre selon le système, adaptée au mobile.
@@ -53,7 +53,8 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 - **Rechercher** : la barre du haut filtre le fil au fil de la frappe (titre ou chaîne, sans tenir compte des accents ni des majuscules).
 - **Menu** (☰) : réduit ou déplie le menu latéral ; le choix est mémorisé.
 - **Filtres** : « Tous » ou un groupe. Le filtre choisi est conservé après une synchronisation.
-- **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché. Cliquez sur « Se connecter à YouTube » pour le mettre à jour.
+- **Synchronisation automatique** : toutes les 5 minutes et à chaque retour sur l'onglet, l'application synchronise si la dernière synchronisation date de plus de 30 minutes. Si de nouvelles vidéos arrivent alors que vous êtes descendu dans le fil, une pastille « Nouvelles vidéos » les affiche au lieu de déplacer la page.
+- **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché et la synchronisation automatique s'arrête. Cliquez sur « Se connecter » pour reprendre.
 - **Se déconnecter** (menu de votre avatar) : révoque le jeton et vide l'écran. Les caches et les groupes restent dans le navigateur.
 
 ## Fonctionnement
@@ -122,7 +123,7 @@ Le quota par défaut est de 10 000 unités par jour et par projet Google Cloud. 
 | Playlists des nouvelles chaînes | 1 unité par lot de 50 chaînes jamais vues |
 | **Synchronisation** | **1 unité par chaîne**, plus 1 unité par lot de 50 vidéos récupérées (durées et vues) |
 
-Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une par heure ; « Forcer la synchro » ignore cette limite.
+Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une toutes les 30 minutes, et seulement pendant la session Google (environ 1 h) ; l'icône de synchronisation ignore cette limite.
 
 ## Sécurité
 
@@ -133,7 +134,7 @@ Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 22
 
 ## Limites connues
 
-- Pas de synchronisation périodique tant que l'onglet reste ouvert : elle a lieu au chargement ou à la demande.
+- Sans serveur, le jeton Google (environ 1 h) ne peut pas être renouvelé sans un clic : la synchronisation automatique s'interrompt à son expiration.
 
 ## Licence
 

@@ -39,6 +39,19 @@ export function setSyncing(isSyncing) {
     document.getElementById('force-sync-button')?.classList.toggle('spinning', isSyncing);
 }
 
+// "Nouvelles vidéos" pill; onClick shows them
+export function showNewVideosPill(onClick) {
+    const pill = document.getElementById('new-videos-pill');
+    if (!pill) return;
+    pill.onclick = onClick;
+    pill.hidden = false;
+}
+
+export function hideNewVideosPill() {
+    const pill = document.getElementById('new-videos-pill');
+    if (pill) pill.hidden = true;
+}
+
 // Update authentication UI
 export function updateAuthUI(isAuthenticated) {
     const show = (id, visible, display = 'inline-flex') => {
