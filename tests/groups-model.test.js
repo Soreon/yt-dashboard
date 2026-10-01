@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, mergeGroups, parseGroupsFile,
-    removeFromGroup, removeGroup, renameGroup, ungroupedChannels, upsertGroup
+    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels, isInactive,
+    mergeGroups, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup, ungroupedChannels,
+    upsertGroup
 } from '../js/groups-model.js';
 
 const groups = { Tech: ['A', 'B'], Musique: ['C'], Jeux: ['D'] };
@@ -141,4 +142,28 @@ test('channelActivity and groupActivity read the latest video and the unwatched 
     assert.deepEqual(channelActivity('Z', cache, history), { lastUpload: null, unwatched: 0 });
     assert.deepEqual(groupActivity(['A', 'B', 'Z'], cache, history), { lastUpload: '2026-09-20T00:00:00Z', unwatched: 2 });
     assert.deepEqual(groupActivity([], cache, history), { lastUpload: null, unwatched: 0 });
+});
+
+test('moveToGroup adds channels to a group and removes them from the others', () => {
+    const result = moveToGroup(groups, 'Archive', ['A', 'C']);
+    assert.deepEqual(result, { Tech: ['B'], Musique: [], Jeux: ['D'], Archive: ['A', 'C'] });
+    assert.deepEqual(moveToGroup(result, 'Archive', ['D']).Archive, ['A', 'C', 'D']);
+    assert.deepEqual(groups.Tech, ['A', 'B'], 'the original groups are not modified');
+});
+
+test('isInactive needs a known video older than a year', () => {
+    const now = Date.parse('2026-10-01T00:00:00Z');
+    assert.equal(isInactive('2025-09-30T00:00:00Z', now), true);
+    assert.equal(isInactive('2025-10-02T00:00:00Z', now), false);
+    assert.equal(isInactive(null, now), false);
+});
+
+test('inactiveChannels lists inactive channels, most recently active first', () => {
+    const now = Date.parse('2026-10-01T00:00:00Z');
+    const cache = {
+        A: [{ videoId: 'a1', publishedAt: '2020-01-01T00:00:00Z' }],
+        B: [{ videoId: 'b1', publishedAt: '2026-09-01T00:00:00Z' }],
+        C: [{ videoId: 'c1', publishedAt: '2024-06-01T00:00:00Z' }, { videoId: 'c2', publishedAt: '2023-01-01T00:00:00Z' }]
+    };
+    assert.deepEqual(inactiveChannels(['A', 'B', 'C', 'Z'], cache, now), ['C', 'A']);
 });

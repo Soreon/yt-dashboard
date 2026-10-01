@@ -188,6 +188,37 @@ test('exports the groups to a file that imports them back on another device', as
     await other.close();
 });
 
+test('inactive channels are flagged, listed, and moved to Archive in one click', async ({ page, youtube }) => {
+    youtube.inactive.add('UC_C');
+    await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A', 'UC_B'], Musique: ['UC_C'] } }, '/#groupes');
+    await expect(page.locator('#inactive-count')).toHaveText('1');
+
+    await page.goto('/#groupe/Musique');
+    await expect(page.locator('#group-meta')).toContainText('1 inactive');
+    await expect(rowOf(page, 'Chaîne C').locator('.inactive-badge')).toHaveText('Inactive');
+    await expect(rowOf(page, 'Chaîne C').locator('.group-meta')).toContainText('il y a 1 an');
+
+    await page.locator('.back-link').click();
+    await page.locator('#inactive-link').click();
+    await expect(page).toHaveURL(/#inactives$/);
+    await expect(page.locator('#group-title')).toHaveText('Inactives depuis plus d\'un an');
+    await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne C']);
+    await expect(rows(page).first().locator('.mini-chip')).toHaveText(['Musique']);
+
+    await page.locator('#archive-all').click();
+    await expect(page).toHaveURL(/#groupe\/Archive$/);
+    await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne C']);
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Tech: ['UC_A', 'UC_B'], Musique: [], Archive: ['UC_C'] });
+    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Musique', 'Archive']);
+
+    // Still inactive, but already archived: nothing left to move
+    await page.goto('/#inactives');
+    await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne C']);
+    await expect(rows(page).first().locator('.mini-chip')).toHaveText(['Archive']);
+    await expect(page.locator('#group-meta')).toContainText('1 déjà dans « Archive »');
+    await expect(page.locator('#archive-all')).toBeHidden();
+});
+
 test('an unknown group in the URL goes back to the overview', async ({ page }) => {
     await openApp(page, signedIn(), '/#groupe/Inconnu');
     await expect(page.locator('#error-message')).toContainText('n\'existe pas');

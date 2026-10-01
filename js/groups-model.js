@@ -78,6 +78,31 @@ export function channelActivity(channelId, videoCache, history) {
     return { lastUpload, unwatched };
 }
 
+// Copy of the groups with channels moved to one group: added to it, removed from every other
+export function moveToGroup(groups, name, channelIds) {
+    const moved = new Set(channelIds);
+    const cleaned = Object.fromEntries(Object.entries(groups).map(([groupName, ids]) =>
+        [groupName, groupName === name ? ids : ids.filter(id => !moved.has(id))]
+    ));
+    return addToGroup(cleaned, name, channelIds);
+}
+
+export const INACTIVE_AFTER_MS = 365 * 24 * 60 * 60 * 1000; // No video for a year: the channel is inactive
+
+// Whether a channel's latest known video is older than the threshold (unknown activity: false)
+export function isInactive(lastUpload, now = Date.now(), threshold = INACTIVE_AFTER_MS) {
+    return Boolean(lastUpload) && Date.parse(lastUpload) < now - threshold;
+}
+
+// Channels (among channelIds) inactive according to the cache, most recently active first
+export function inactiveChannels(channelIds, videoCache, now = Date.now(), threshold = INACTIVE_AFTER_MS) {
+    return channelIds
+        .map(channelId => ({ channelId, lastUpload: channelActivity(channelId, videoCache, {}).lastUpload }))
+        .filter(({ lastUpload }) => isInactive(lastUpload, now, threshold))
+        .sort((a, b) => b.lastUpload.localeCompare(a.lastUpload))
+        .map(({ channelId }) => channelId);
+}
+
 // Same for a whole group: latest video of any channel, sum of unwatched videos
 export function groupActivity(channelIds, videoCache, history) {
     return channelIds.reduce((total, channelId) => {

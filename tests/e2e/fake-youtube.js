@@ -37,6 +37,7 @@ export class FakeYouTube {
         this.noLongForm = new Set(); // Channels whose long-form playlist (UULF…) answers 404
         this.failures = {}; // { endpoint: HTTP status } to make an endpoint fail
         this.newVideos = []; // Videos published on UC_A during the test: { videoId, publishedAt }
+        this.inactive = new Set(); // Channels whose videos are all more than a year old
         this.calls = []; // Every API call: { endpoint, params, auth }
         this.gisDelay = 300; // The Google script loads asynchronously, like the real one
     }
@@ -121,7 +122,7 @@ export class FakeYouTube {
         }
 
         const channelIndex = ['UC_A', 'UC_B', 'UC_C'].indexOf(channelId) + 1 || 4;
-        const base = Date.now() - channelIndex * HOUR;
+        const base = Date.now() - channelIndex * HOUR - (this.inactive.has(channelId) ? 400 * DAY : 0);
         const item = (videoId, title, publishedAt) => ({
             snippet: {
                 title,

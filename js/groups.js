@@ -2,8 +2,9 @@
 
 import { getRelativeTime, isValidYouTubeId, normalizeText } from './feed.js';
 import {
-    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, mergeGroups, parseGroupsFile,
-    removeFromGroup, removeGroup, renameGroup, ungroupedChannels, upsertGroup
+    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels, isInactive,
+    mergeGroups, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup, ungroupedChannels,
+    upsertGroup
 } from './groups-model.js';
 import {
     getChannelAvatars, getChannelNames, getUserGroups, getVideoCache, getWatchHistory, saveUserGroups
@@ -12,9 +13,11 @@ import { downloadJson, setAvatar, showError, showToast } from './ui.js';
 
 const ICON_MORE = 'M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z';
 const UNGROUPED = Symbol('ungrouped');
+const INACTIVE = Symbol('inactive');
+const ARCHIVE_GROUP = 'Archive';
 
 let handlers = { onGroupsChanged: () => {}, onShowFeed: () => {} };
-let route = { view: 'overview' }; // { view: 'overview' } | { view: 'detail', name } | { view: 'ungrouped' }
+let route = { view: 'overview' }; // { view: 'overview' | 'ungrouped' | 'inactive' } | { view: 'detail', name }
 let searchQuery = '';
 let renderedKey = null; // Which view was rendered last: a re-render of the same one keeps its forms open
 let openAddPanelNext = false; // Open the channel picker at the next render (after creating a group)
@@ -26,6 +29,7 @@ const plural = (count, word) => `${count} ${word}${count > 1 ? 's' : ''}`;
 export function groupsRouteFromHash(hash) {
     if (hash === '#groupes') return { view: 'overview' };
     if (hash === '#sans-groupe') return { view: 'ungrouped' };
+    if (hash === '#inactives') return { view: 'inactive' };
     if (hash.startsWith('#groupe/')) {
         try {
             return { view: 'detail', name: decodeURIComponent(hash.slice('#groupe/'.length)) };
@@ -77,6 +81,7 @@ export function setupGroupsPage(pageHandlers) {
         renameCurrentGroup($('rename-input').value);
     });
     $('delete-group').addEventListener('click', () => deleteGroup(route.name));
+    $('archive-all').addEventListener('click', archiveInactiveChannels);
 
     // Row menus (<details>) close on a click elsewhere or Escape
     document.addEventListener('click', event => {
@@ -96,7 +101,7 @@ export function renderGroupsPage(pageRoute, query = '') {
     route = pageRoute;
     searchQuery = normalizeText(query.trim());
 
-    const detail = route.view === 'detail' || route.view === 'ungrouped';
+    const detail = route.view !== 'overview';
     $('groups-overview').hidden = detail;
     $('group-detail').hidden = !detail;
 
@@ -104,6 +109,8 @@ export function renderGroupsPage(pageRoute, query = '') {
         renderOverview();
     } else if (route.view === 'ungrouped') {
         renderChannelsView(UNGROUPED);
+    } else if (route.view === 'inactive') {
+        renderChannelsView(INACTIVE);
     } else if (Object.hasOwn(getUserGroups(), route.name)) {
         renderChannelsView(route.name);
     } else {
@@ -137,6 +144,7 @@ function renderOverview() {
 
     $('export-groups').disabled = entries.length === 0;
     $('ungrouped-count').textContent = ungroupedChannels(groups, subscribedChannelIds()).length;
+    $('inactive-count').textContent = inactiveChannels(subscribedChannelIds(), videoCache).length;
 
     const grid = $('groups-grid');
     grid.innerHTML = '';
@@ -208,17 +216,22 @@ function renderChannelsView(target) {
     const videoCache = getVideoCache();
     const history = getWatchHistory();
     const ungrouped = target === UNGROUPED;
+    const inactive = target === INACTIVE;
 
-    const channelIds = sortByName(
-        ungrouped ? ungroupedChannels(groups, subscribedChannelIds()) : groups[target],
-        channelNames
-    );
+    let channelIds;
+    if (inactive) {
+        channelIds = inactiveChannels(subscribedChannelIds(), videoCache); // Most recently active first
+    } else {
+        channelIds = sortByName(ungrouped ? ungroupedChannels(groups, subscribedChannelIds()) : groups[target], channelNames);
+    }
 
-    $('group-title').textContent = ungrouped ? 'Sans groupe' : target;
-    $('group-actions').hidden = ungrouped;
+    $('group-title').textContent = ungrouped ? 'Sans groupe' : inactive ? 'Inactives depuis plus d\'un an' : target;
+    $('group-actions').hidden = ungrouped || inactive;
+    const notArchived = inactive ? inactiveChannelsToArchive(groups) : [];
+    $('inactive-actions').hidden = !inactive || notArchived.length === 0;
 
     // Arriving on this view: closed forms (or the picker open, right after creating the group)
-    const key = ungrouped ? 'ungrouped' : `group:${target}`;
+    const key = ungrouped ? 'ungrouped' : inactive ? 'inactive' : `group:${target}`;
     if (key !== renderedKey) {
         renderedKey = key;
         showRenameForm(false);
@@ -227,12 +240,17 @@ function renderChannelsView(target) {
     }
 
     const { lastUpload, unwatched } = groupActivity(channelIds, videoCache, history);
+    const inactiveCount = inactiveChannels(channelIds, videoCache).length;
     $('group-meta').textContent = ungrouped
         ? `${plural(channelIds.length, 'chaîne')} dans aucun groupe`
+        : inactive
+        ? `${plural(channelIds.length, 'chaîne')} sans vidéo depuis un an, d'après les vidéos connues de l'application`
+            + (channelIds.length > notArchived.length ? ` · ${channelIds.length - notArchived.length} déjà dans « ${ARCHIVE_GROUP} »` : '')
         : [
             plural(channelIds.length, 'chaîne'),
             `${plural(unwatched, 'vidéo')} non ${unwatched > 1 ? 'vues' : 'vue'}`,
-            lastUpload ? `dernière vidéo ${getRelativeTime(lastUpload)}` : null
+            lastUpload ? `dernière vidéo ${getRelativeTime(lastUpload)}` : null,
+            inactiveCount > 0 ? `${inactiveCount} inactive${inactiveCount > 1 ? 's' : ''}` : null
         ].filter(Boolean).join(' · ');
 
     const rows = $('group-channels');
@@ -241,6 +259,8 @@ function renderChannelsView(target) {
     if (channelIds.length === 0) {
         rows.innerHTML = `<div class="no-videos">${ungrouped
             ? 'Toutes vos chaînes sont dans au moins un groupe.'
+            : inactive
+            ? 'Aucune chaîne inactive : toutes ont publié une vidéo depuis un an.'
             : 'Ce groupe est vide. Ajoutez-lui des chaînes pour le voir dans le fil.'}</div>`;
         return;
     }
@@ -290,6 +310,14 @@ function createChannelRow(channelId, target, { groups, channelNames, channelAvat
 
     main.append(title, meta);
 
+    if (isInactive(activity.lastUpload)) {
+        const badge = document.createElement('span');
+        badge.className = 'inactive-badge';
+        badge.textContent = 'Inactive';
+        title.after(badge);
+        title.style.display = 'inline';
+    }
+
     const otherGroups = groupsOfChannel(groups, channelId).filter(groupName => groupName !== target);
     if (otherGroups.length > 0) {
         const chips = document.createElement('div');
@@ -336,7 +364,7 @@ function createRowMenu(channelId, channelName, target, groups) {
         });
     }
 
-    if (target !== UNGROUPED) {
+    if (typeof target === 'string') {
         const remove = menuItem(`Retirer de « ${target} »`, () => {
             saveUserGroups(removeFromGroup(getUserGroups(), target, channelId));
             handlers.onGroupsChanged({ from: target, to: target });
@@ -416,6 +444,24 @@ function deleteGroup(name) {
     saveUserGroups(removeGroup(getUserGroups(), name));
     handlers.onGroupsChanged({ from: name, to: null });
     location.hash = '#groupes';
+}
+
+// Inactive channels not in the Archive group yet
+function inactiveChannelsToArchive(groups) {
+    const archived = new Set(groups[ARCHIVE_GROUP] || []);
+    return inactiveChannels(subscribedChannelIds(), getVideoCache()).filter(id => !archived.has(id));
+}
+
+// "Tout déplacer vers Archive": the inactive channels join the Archive group and leave the others
+function archiveInactiveChannels() {
+    const channelIds = inactiveChannelsToArchive(getUserGroups());
+    if (channelIds.length === 0) return;
+    if (!confirm(`Déplacer ${plural(channelIds.length, 'chaîne inactive')} vers le groupe « ${ARCHIVE_GROUP} » ? Elles seront retirées de leurs autres groupes.`)) return;
+
+    saveUserGroups(moveToGroup(getUserGroups(), ARCHIVE_GROUP, channelIds));
+    handlers.onGroupsChanged({ from: null, to: ARCHIVE_GROUP });
+    showToast(`${plural(channelIds.length, 'chaîne')} déplacée${channelIds.length > 1 ? 's' : ''} vers « ${ARCHIVE_GROUP} »`);
+    location.hash = groupHash(ARCHIVE_GROUP);
 }
 
 // --- Add channels panel ---
