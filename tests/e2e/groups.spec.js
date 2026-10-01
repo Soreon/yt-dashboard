@@ -17,9 +17,9 @@ test.beforeEach(async ({ page }) => {
 test('creates a group, refuses a duplicate name and filters the feed', async ({ page }) => {
     await page.locator('#manage-groups-button').click();
 
-    // No group yet: an empty list, nothing to export
+    // No group yet: an empty list, but the subscriptions can already be exported
     await expect(page.locator('#groups-list')).toContainText('Aucun groupe');
-    await expect(page.locator('#export-groups')).toBeDisabled();
+    await expect(page.locator('#export-groups')).toBeEnabled();
     await page.locator('#new-group').click();
     await expect(page.locator('#groups-modal-title')).toHaveText('Nouveau groupe');
     await expect(page.locator('#delete-group')).toBeHidden();

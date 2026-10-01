@@ -93,7 +93,8 @@ function showList() {
     list.innerHTML = '';
 
     const entries = Object.entries(getUserGroups());
-    $('export-groups').disabled = entries.length === 0;
+    // The file also lists the subscriptions: useful even without any group
+    $('export-groups').disabled = entries.length === 0 && Object.keys(getChannelNames()).length === 0;
     if (entries.length === 0) {
         list.innerHTML = '<li class="no-channels">Aucun groupe pour l\'instant. Créez-en un pour filtrer le fil par thème.</li>';
         return;
