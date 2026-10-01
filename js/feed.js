@@ -30,13 +30,74 @@ export function toCachedVideo(item) {
 
 // Merge freshly fetched playlist items into a channel's cached videos
 export function mergeChannelVideos(items, cachedVideos = []) {
-    const fetchedVideos = items.map(toCachedVideo).filter(video => video.videoId);
+    const cachedById = new Map(cachedVideos.map(video => [video.videoId, video]));
+
+    // Fresh snippet data wins, details already known (duration, views) are kept
+    const fetchedVideos = items
+        .map(toCachedVideo)
+        .filter(video => video.videoId)
+        .map(video => ({ ...cachedById.get(video.videoId), ...video }));
     const fetchedVideoIds = new Set(fetchedVideos.map(video => video.videoId));
 
     // Keep older cached videos that were not returned again
     const olderVideos = cachedVideos.filter(video => !fetchedVideoIds.has(video.videoId));
 
     return [...fetchedVideos, ...olderVideos].slice(0, MAX_VIDEOS_PER_CHANNEL);
+}
+
+// IDs of cached videos whose details (duration, views) were never fetched
+export function videosMissingDetails(videoCache) {
+    return Object.values(videoCache)
+        .flat()
+        .filter(video => video.duration === undefined)
+        .map(video => video.videoId);
+}
+
+// Copy of the video cache with fetched details ({ videoId: { duration, views } }) applied
+export function applyVideoDetails(videoCache, details) {
+    return Object.fromEntries(Object.entries(videoCache).map(([channelId, videos]) => [
+        channelId,
+        videos.map(video => details[video.videoId] ? { ...video, ...details[video.videoId] } : video)
+    ]));
+}
+
+// ISO 8601 duration from the API ("PT1H2M3S", "P1DT2H", "P0D") to seconds, null if unreadable
+export function parseIsoDuration(iso) {
+    const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso || '');
+    if (!match) return null;
+
+    const [days, hours, minutes, seconds] = match.slice(1).map(part => Number(part) || 0);
+    return ((days * 24 + hours) * 60 + minutes) * 60 + seconds;
+}
+
+// Duration badge text, as on YouTube: "0:45", "12:05", "1:02:03"
+export function formatDuration(totalSeconds) {
+    if (!totalSeconds) return '';
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = n => String(n).padStart(2, '0');
+
+    return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+}
+
+// View count as shown by YouTube in French: "345 vues", "1,2 k vues", "3,4 M de vues"
+export function formatViews(views) {
+    if (views === null || views === undefined) return '';
+    if (views === 0) return 'Aucune vue';
+    if (views === 1) return '1 vue';
+    if (views < 1000) return `${views} vues`;
+
+    // YouTube truncates (1 290 → "1,2 k") and keeps one decimal below 10 of the unit
+    const compact = (value, unit) => {
+        const shown = value < 10 ? Math.floor(value * 10) / 10 : Math.floor(value);
+        return `${String(shown).replace('.', ',')} ${unit}`;
+    };
+
+    if (views < 1e6) return `${compact(views / 1e3, 'k')} vues`;
+    if (views < 1e9) return `${compact(views / 1e6, 'M')} de vues`;
+    return `${compact(views / 1e9, 'Md')} de vues`;
 }
 
 // Copy of a { channelId: value } map limited to the given channels
@@ -62,7 +123,7 @@ export function buildFeed(videoCache, channelIds = null) {
     });
 }
 
-// Format relative time
+// Relative publication time, worded like YouTube: "il y a 3 heures", "il y a 2 semaines"
 export function getRelativeTime(dateString, now = Date.now()) {
     if (!dateString) return 'Date inconnue';
 
@@ -70,18 +131,19 @@ export function getRelativeTime(dateString, now = Date.now()) {
     if (isNaN(published)) return 'Date invalide';
 
     const diff = now - published;
+    if (diff < 0) return 'Prochainement'; // Scheduled premiere
 
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    const months = Math.floor(days / 30);
-    const years = Math.floor(days / 365);
+    const ago = (count, singular, plural = `${singular}s`) => `il y a ${count} ${count > 1 ? plural : singular}`;
 
-    if (years > 0) return `il y a ${years} an${years > 1 ? 's' : ''}`;
-    if (months > 0) return `il y a ${months} mois`;
-    if (days > 0) return `il y a ${days} jour${days > 1 ? 's' : ''}`;
-    if (hours > 0) return `il y a ${hours}h`;
-    if (minutes > 0) return `il y a ${minutes}min`;
-    return 'à l\'instant';
+    if (days >= 365) return ago(Math.floor(days / 365), 'an');
+    if (days >= 30) return ago(Math.floor(days / 30), 'mois', 'mois');
+    if (days >= 7) return ago(Math.floor(days / 7), 'semaine');
+    if (days > 0) return ago(days, 'jour');
+    if (hours > 0) return ago(hours, 'heure');
+    if (minutes > 0) return ago(minutes, 'minute');
+    return ago(Math.max(seconds, 1), 'seconde');
 }

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import { MAX_VIDEOS_PER_CHANNEL } from '../js/config.js';
 import {
-    buildFeed, getRelativeTime, isValidYouTubeId, keepChannels, longFormPlaylistId, mergeChannelVideos,
-    toCachedVideo
+    applyVideoDetails, buildFeed, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
+    longFormPlaylistId, mergeChannelVideos, parseIsoDuration, toCachedVideo, videosMissingDetails
 } from '../js/feed.js';
 
 // playlistItems API item, as returned by the YouTube Data API
@@ -106,22 +106,81 @@ test('buildFeed puts videos without date last', () => {
     assert.deepEqual(feed.map(v => v.videoId), ['dated', 'nodate']);
 });
 
-test('getRelativeTime formats each unit in French', () => {
+test('getRelativeTime words each unit like YouTube', () => {
     const now = Date.parse('2026-06-15T12:00:00Z');
     const ago = ms => new Date(now - ms).toISOString();
-    const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+    const SEC = 1000, MIN = 60 * SEC, HOUR = 60 * MIN, DAY = 24 * HOUR;
 
-    assert.equal(getRelativeTime(ago(10 * 1000), now), 'à l\'instant');
-    assert.equal(getRelativeTime(ago(5 * MIN), now), 'il y a 5min');
-    assert.equal(getRelativeTime(ago(3 * HOUR), now), 'il y a 3h');
+    assert.equal(getRelativeTime(ago(0), now), 'il y a 1 seconde');
+    assert.equal(getRelativeTime(ago(10 * SEC), now), 'il y a 10 secondes');
+    assert.equal(getRelativeTime(ago(1 * MIN), now), 'il y a 1 minute');
+    assert.equal(getRelativeTime(ago(5 * MIN), now), 'il y a 5 minutes');
+    assert.equal(getRelativeTime(ago(3 * HOUR), now), 'il y a 3 heures');
     assert.equal(getRelativeTime(ago(1 * DAY), now), 'il y a 1 jour');
-    assert.equal(getRelativeTime(ago(2 * DAY), now), 'il y a 2 jours');
+    assert.equal(getRelativeTime(ago(6 * DAY), now), 'il y a 6 jours');
+    assert.equal(getRelativeTime(ago(7 * DAY), now), 'il y a 1 semaine');
+    assert.equal(getRelativeTime(ago(20 * DAY), now), 'il y a 2 semaines');
     assert.equal(getRelativeTime(ago(45 * DAY), now), 'il y a 1 mois');
+    assert.equal(getRelativeTime(ago(200 * DAY), now), 'il y a 6 mois');
     assert.equal(getRelativeTime(ago(400 * DAY), now), 'il y a 1 an');
     assert.equal(getRelativeTime(ago(800 * DAY), now), 'il y a 2 ans');
+    assert.equal(getRelativeTime(new Date(now + HOUR).toISOString(), now), 'Prochainement');
 });
 
 test('getRelativeTime handles missing and invalid dates', () => {
     assert.equal(getRelativeTime(undefined), 'Date inconnue');
     assert.equal(getRelativeTime('pas une date'), 'Date invalide');
+});
+
+test('mergeChannelVideos keeps the details already known for a video', () => {
+    const merged = mergeChannelVideos([apiItem('v1')], [{ ...cached('v1'), duration: 600, views: 42 }]);
+    assert.equal(merged[0].duration, 600);
+    assert.equal(merged[0].views, 42);
+});
+
+test('videosMissingDetails lists videos never detailed', () => {
+    const cache = { A: [{ ...cached('a1'), duration: 60, views: 1 }, cached('a2')], B: [{ ...cached('b1'), duration: null, views: null }] };
+    assert.deepEqual(videosMissingDetails(cache), ['a2']);
+});
+
+test('applyVideoDetails merges details without touching other videos', () => {
+    const cache = { A: [cached('a1'), cached('a2')] };
+    const updated = applyVideoDetails(cache, { a1: { duration: 90, views: 1000 } });
+    assert.equal(updated.A[0].duration, 90);
+    assert.equal(updated.A[0].views, 1000);
+    assert.equal(updated.A[1].duration, undefined);
+    assert.equal(cache.A[0].duration, undefined, 'the original cache is not modified');
+});
+
+test('parseIsoDuration converts API durations to seconds', () => {
+    assert.equal(parseIsoDuration('PT45S'), 45);
+    assert.equal(parseIsoDuration('PT12M5S'), 725);
+    assert.equal(parseIsoDuration('PT1H2M3S'), 3723);
+    assert.equal(parseIsoDuration('PT2H'), 7200);
+    assert.equal(parseIsoDuration('P1DT2H'), 93600);
+    assert.equal(parseIsoDuration('P0D'), 0);
+    assert.equal(parseIsoDuration('n/a'), null);
+    assert.equal(parseIsoDuration(undefined), null);
+});
+
+test('formatDuration matches the YouTube badge', () => {
+    assert.equal(formatDuration(45), '0:45');
+    assert.equal(formatDuration(725), '12:05');
+    assert.equal(formatDuration(3723), '1:02:03');
+    assert.equal(formatDuration(0), '');
+    assert.equal(formatDuration(null), '');
+});
+
+test('formatViews matches YouTube in French', () => {
+    assert.equal(formatViews(0), 'Aucune vue');
+    assert.equal(formatViews(1), '1 vue');
+    assert.equal(formatViews(345), '345 vues');
+    assert.equal(formatViews(1000), '1 k vues');
+    assert.equal(formatViews(1290), '1,2 k vues');
+    assert.equal(formatViews(12900), '12 k vues');
+    assert.equal(formatViews(999999), '999 k vues');
+    assert.equal(formatViews(3456789), '3,4 M de vues');
+    assert.equal(formatViews(25000000), '25 M de vues');
+    assert.equal(formatViews(1500000000), '1,5 Md de vues');
+    assert.equal(formatViews(null), '');
 });

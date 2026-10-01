@@ -1,12 +1,14 @@
 // Global Video Feed - entry point: authentication, loading and sync
 
 import { CLIENT_ID, SCOPES, SYNC_INTERVAL_MS } from './config.js';
-import { AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchUploadsPlaylists } from './api.js';
-import { buildFeed, keepChannels, mergeChannelVideos } from './feed.js';
+import {
+    AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchUploadsPlaylists, fetchVideoDetails
+} from './api.js';
+import { applyVideoDetails, buildFeed, keepChannels, mergeChannelVideos, videosMissingDetails } from './feed.js';
 import { openGroupsModal, setupGroupsModal } from './groups.js';
 import {
     clearAuthData, getAuthData, getCacheVersion, getChannelNames, getLastSync, getPlaylistCache,
-    getUserGroups, getVideoCache, hasStoredSession, saveAuthData, saveCacheVersion, saveChannelNames,
+    getUserGroups, getVideoCache, hasStoredSession, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames,
     saveLastSync, savePlaylistCache, saveVideoCache
 } from './storage.js';
 import {
@@ -205,8 +207,14 @@ async function syncAllChannels(force = false) {
             videoCache[channelId] = mergeChannelVideos(videos, videoCache[channelId]);
         });
 
+        // Durations and view counts: refresh the videos just fetched (recent, views still
+        // moving) and fill in any cached video that has none yet
+        const fetchedIds = results.filter(Boolean).flat().map(item => item.snippet?.resourceId?.videoId);
+        const detailIds = [...new Set([...fetchedIds, ...videosMissingDetails(videoCache)])].filter(Boolean);
+        const details = await fetchVideoDetails(detailIds, accessToken);
+
         // Save updated cache and timestamp
-        storeVideoCache(videoCache);
+        storeVideoCache(applyVideoDetails(videoCache, details));
         saveLastSync(now);
 
         console.log('Sync completed successfully');
@@ -245,13 +253,17 @@ async function loadSubscriptions() {
             return;
         }
 
-        // Extract channel IDs and save channel names
+        // Extract channel IDs and save channel names and avatars
         const channelIds = subscriptions.map(sub => sub.snippet.resourceId.channelId);
         const channelNames = {};
+        const channelAvatars = {};
         subscriptions.forEach(sub => {
-            channelNames[sub.snippet.resourceId.channelId] = sub.snippet.title;
+            const channelId = sub.snippet.resourceId.channelId;
+            channelNames[channelId] = sub.snippet.title;
+            channelAvatars[channelId] = sub.snippet.thumbnails?.default?.url || '';
         });
         saveChannelNames(channelNames);
+        saveChannelAvatars(channelAvatars);
         pruneUnsubscribedChannels(channelIds);
         renderVideoFeed();
 

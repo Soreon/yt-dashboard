@@ -59,6 +59,7 @@ Connexion (jeton OAuth)
   → subscriptions.list   tous les abonnements, 50 par page
   → channels.list        playlist « uploads » de chaque nouvelle chaîne, par lots de 50
   → playlistItems.list   5 dernières vidéos (hors Shorts) de chaque chaîne, en parallèle
+  → videos.list          durée et nombre de vues de ces vidéos, par lots de 50
   → fil trié par date, max 10 vidéos conservées par chaîne
 ```
 
@@ -96,7 +97,8 @@ npm test
 | `yt_auth_token` | Jeton d'accès et date d'expiration |
 | `yt_playlist_cache` | ID de chaîne → ID de sa playlist « uploads » |
 | `yt_channel_names` | ID de chaîne → nom, pour la fenêtre des groupes |
-| `yt_video_cache` | ID de chaîne → dernières vidéos (ID, titre, chaîne, date, miniature) |
+| `yt_channel_avatars` | ID de chaîne → URL de son avatar |
+| `yt_video_cache` | ID de chaîne → dernières vidéos (ID, titre, chaîne, date, miniature, durée, vues) |
 | `yt_last_sync` | Date de la dernière synchronisation réussie |
 | `yt_user_groups` | Nom du groupe → liste d'ID de chaînes |
 | `yt_cache_version` | Version du format du cache (un cache plus ancien est reconstruit à la synchronisation suivante) |
@@ -111,9 +113,9 @@ Le quota par défaut est de 10 000 unités par jour et par projet Google Cloud. 
 | --- | --- |
 | Chargement des abonnements | 1 unité par tranche de 50 abonnements |
 | Playlists des nouvelles chaînes | 1 unité par lot de 50 chaînes jamais vues |
-| **Synchronisation** | **1 unité par chaîne** |
+| **Synchronisation** | **1 unité par chaîne**, plus 1 unité par lot de 50 vidéos récupérées (durées et vues) |
 
-Exemple avec 200 abonnements : environ 4 unités par chargement, plus 200 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une par heure ; « Forcer la synchro » ignore cette limite.
+Exemple avec 200 abonnements : environ 4 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une par heure ; « Forcer la synchro » ignore cette limite.
 
 ## Sécurité
 

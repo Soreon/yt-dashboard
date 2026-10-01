@@ -6,6 +6,7 @@ const VIDEOS_KEY = 'yt_video_cache';
 const LAST_SYNC_KEY = 'yt_last_sync';
 const GROUPS_KEY = 'yt_user_groups';
 const CHANNEL_NAMES_KEY = 'yt_channel_names';
+const CHANNEL_AVATARS_KEY = 'yt_channel_avatars';
 const CACHE_VERSION_KEY = 'yt_cache_version';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
@@ -103,6 +104,15 @@ export function getChannelNames() {
 
 export function saveChannelNames(names) {
     return writeJSON(CHANNEL_NAMES_KEY, names);
+}
+
+// { channelId: avatar URL }
+export function getChannelAvatars() {
+    return readJSON(CHANNEL_AVATARS_KEY, {});
+}
+
+export function saveChannelAvatars(avatars) {
+    return writeJSON(CHANNEL_AVATARS_KEY, avatars);
 }
 
 // Format version of the video cache (0 = written before versioning)

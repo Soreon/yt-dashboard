@@ -1,7 +1,7 @@
 // YouTube Data API v3, authenticated with the OAuth access token
 
 import { BATCH_SIZE, VIDEOS_PER_SYNC } from './config.js';
-import { longFormPlaylistId } from './feed.js';
+import { longFormPlaylistId, parseIsoDuration } from './feed.js';
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -78,6 +78,33 @@ export async function fetchUploadsPlaylists(channelIds, token) {
     }
 
     return playlists;
+}
+
+// Duration (seconds) and view count of videos, in parallel batches of 50: { videoId: { duration, views } }
+export async function fetchVideoDetails(videoIds, token) {
+    const batches = [];
+    for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        batches.push(videoIds.slice(i, i + BATCH_SIZE));
+    }
+
+    const details = {};
+    await Promise.all(batches.map(async batch => {
+        try {
+            const data = await apiFetch('videos', { part: 'contentDetails,statistics', id: batch.join(',') }, token);
+            (data.items || []).forEach(video => {
+                const viewCount = video.statistics?.viewCount;
+                details[video.id] = {
+                    duration: parseIsoDuration(video.contentDetails?.duration),
+                    views: viewCount === undefined ? null : Number(viewCount)
+                };
+            });
+        } catch (error) {
+            if (error instanceof AuthError) throw error;
+            console.error('Error fetching video details:', error);
+        }
+    }));
+
+    return details;
 }
 
 // Latest items of a playlist
