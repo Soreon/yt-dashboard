@@ -17,6 +17,11 @@ const MAX_VIDEOS_PER_CHANNEL = 10;
 
 let accessToken = null;
 let tokenClient = null;
+let isSyncing = false;
+let activeGroup = null; // Group currently used to filter the feed (null = all)
+
+// Raised when the access token is rejected (expired or revoked)
+class AuthError extends Error {}
 
 // Initialize Google Identity Services
 function initializeGoogleAuth() {
@@ -79,8 +84,10 @@ window.handleCredentialResponse = function(response) {
 function requestAccessToken() {
     if (accessToken) {
         loadSubscriptions();
-    } else {
+    } else if (tokenClient) {
         tokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+        showError('Le service Google n\'est pas encore chargé, réessayez dans un instant.');
     }
 }
 
@@ -194,48 +201,51 @@ function clearUI() {
     if (stats) stats.style.display = 'none';
 }
 
+// Authenticated GET on the YouTube Data API
+async function apiFetch(url) {
+    const response = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`
+        }
+    });
+
+    if (response.status === 401) {
+        throw new AuthError('Session expirée');
+    }
+
+    if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+// Handle an expired or revoked access token
+function handleSessionExpired() {
+    showError('Session expirée. Veuillez vous reconnecter.');
+    signOut();
+}
+
 // Fetch all subscriptions recursively
 async function fetchAllSubscriptions() {
     const allSubscriptions = [];
     let nextPageToken = null;
-    
+
     do {
-        try {
-            const url = new URL('https://www.googleapis.com/youtube/v3/subscriptions');
-            url.searchParams.append('part', 'snippet');
-            url.searchParams.append('mine', 'true');
-            url.searchParams.append('maxResults', '50');
-            url.searchParams.append('order', 'alphabetical');
-            if (nextPageToken) {
-                url.searchParams.append('pageToken', nextPageToken);
-            }
-            
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
-            });
-            
-            if (response.status === 401) {
-                showError('Session expirée. Veuillez vous reconnecter.');
-                signOut();
-                return null;
-            }
-            
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            allSubscriptions.push(...(data.items || []));
-            nextPageToken = data.nextPageToken;
-            
-        } catch (error) {
-            showError(`Erreur lors de la récupération des abonnements: ${error.message}`);
-            return null;
+        const url = new URL('https://www.googleapis.com/youtube/v3/subscriptions');
+        url.searchParams.append('part', 'snippet');
+        url.searchParams.append('mine', 'true');
+        url.searchParams.append('maxResults', '50');
+        url.searchParams.append('order', 'alphabetical');
+        if (nextPageToken) {
+            url.searchParams.append('pageToken', nextPageToken);
         }
+
+        const data = await apiFetch(url);
+        allSubscriptions.push(...(data.items || []));
+        nextPageToken = data.nextPageToken;
     } while (nextPageToken);
-    
+
     return allSubscriptions;
 }
 
@@ -361,26 +371,9 @@ async function fetchChannelDetails(channelIds) {
             url.searchParams.append('part', 'contentDetails');
             url.searchParams.append('id', batch.join(','));
             url.searchParams.append('key', API_KEY);
-            
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
-            });
-            
-            if (response.status === 401) {
-                showError('Session expirée. Veuillez vous reconnecter.');
-                signOut();
-                return cache;
-            }
-            
-            if (!response.ok) {
-                console.error(`Batch fetch error: ${response.status}`);
-                continue;
-            }
-            
-            const data = await response.json();
-            
+
+            const data = await apiFetch(url);
+
             // Update cache with new data
             if (data.items) {
                 data.items.forEach(channel => {
@@ -391,6 +384,7 @@ async function fetchChannelDetails(channelIds) {
                 });
             }
         } catch (error) {
+            if (error instanceof AuthError) throw error;
             console.error('Error fetching batch:', error);
         }
     }
@@ -407,6 +401,11 @@ function isValidYouTubeId(id) {
 
 // Smart Sync: Fetch videos from all channels
 async function syncAllChannels(force = false) {
+    if (isSyncing) {
+        console.log('Sync skipped: already in progress');
+        return;
+    }
+
     // Check if sync is needed
     const lastSync = getLastSync();
     const now = Date.now();
@@ -432,15 +431,22 @@ async function syncAllChannels(force = false) {
         loadingText.textContent = 'Mise à jour du flux...';
     }
     setLoading(true);
-    
+    isSyncing = true;
+
     try {
         // Fetch videos from all playlists in parallel
-        const videoPromises = playlistIds.map(playlistId => 
+        const videoPromises = playlistIds.map(playlistId =>
             fetchPlaylistVideos(playlistId)
         );
-        
+
         const results = await Promise.all(videoPromises);
-        
+
+        // Every request failed: keep the previous timestamp so the next load retries
+        if (results.every(videos => videos === null)) {
+            showError('Erreur lors de la synchronisation des vidéos');
+            return;
+        }
+
         // Get current video cache
         const videoCache = getVideoCache();
         
@@ -484,9 +490,14 @@ async function syncAllChannels(force = false) {
         renderFilterButtons();
         
     } catch (error) {
-        console.error('Error during sync:', error);
-        showError('Erreur lors de la synchronisation des vidéos');
+        if (error instanceof AuthError) {
+            handleSessionExpired();
+        } else {
+            console.error('Error during sync:', error);
+            showError('Erreur lors de la synchronisation des vidéos');
+        }
     } finally {
+        isSyncing = false;
         setLoading(false);
         if (loadingText) {
             loadingText.textContent = 'Chargement des abonnements...';
@@ -494,7 +505,7 @@ async function syncAllChannels(force = false) {
     }
 }
 
-// Fetch videos from a single playlist
+// Fetch videos from a single playlist (null if the request failed)
 async function fetchPlaylistVideos(playlistId) {
     try {
         const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
@@ -502,29 +513,14 @@ async function fetchPlaylistVideos(playlistId) {
         url.searchParams.append('playlistId', playlistId);
         url.searchParams.append('maxResults', '5');
         url.searchParams.append('key', API_KEY);
-        
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`
-            }
-        });
-        
-        if (response.status === 401) {
-            // Token expired, will be handled by main flow
-            return [];
-        }
-        
-        if (!response.ok) {
-            console.error(`Error fetching playlist ${playlistId}: ${response.status}`);
-            return [];
-        }
-        
-        const data = await response.json();
+
+        const data = await apiFetch(url);
         return data.items || [];
-        
+
     } catch (error) {
+        if (error instanceof AuthError) throw error;
         console.error(`Error fetching playlist ${playlistId}:`, error);
-        return [];
+        return null;
     }
 }
 
@@ -553,8 +549,8 @@ function getRelativeTime(dateString) {
     return 'à l\'instant';
 }
 
-// Render video feed
-function renderVideoFeed(filterGroup = null) {
+// Render video feed, filtered by the active group
+function renderVideoFeed() {
     const videoCache = getVideoCache();
     const playlistCache = getPlaylistCache();
     
@@ -573,9 +569,9 @@ function renderVideoFeed(filterGroup = null) {
     
     // Filter by group if specified
     let filteredVideos = allVideos;
-    if (filterGroup) {
+    if (activeGroup) {
         const groups = getUserGroups();
-        const channelIds = groups[filterGroup] || [];
+        const channelIds = groups[activeGroup] || [];
         filteredVideos = allVideos.filter(v => channelIds.includes(v.channelId));
     }
     
@@ -706,22 +702,17 @@ function updateStats(subscriptionCount, videoCount) {
 async function loadSubscriptions() {
     setLoading(true);
     clearUI();
-    
+    let loaded = false;
+
     try {
         // First, load videos from cache immediately
         renderVideoFeed();
-        
+
         // Fetch all subscriptions
         const subscriptions = await fetchAllSubscriptions();
-        
-        if (!subscriptions) {
-            setLoading(false);
-            return;
-        }
-        
+
         if (subscriptions.length === 0) {
             showError('Aucun abonnement trouvé.');
-            setLoading(false);
             return;
         }
         
@@ -747,29 +738,44 @@ async function loadSubscriptions() {
         
         // Initialize filter buttons
         renderFilterButtons();
-        
+        loaded = true;
+
     } catch (error) {
-        showError(`Erreur: ${error.message}`);
+        if (error instanceof AuthError) {
+            handleSessionExpired();
+        } else {
+            showError(`Erreur lors de la récupération des abonnements: ${error.message}`);
+        }
     } finally {
         setLoading(false);
-        
-        // Trigger smart sync in background (non-blocking)
+    }
+
+    // Trigger smart sync in background (non-blocking)
+    if (loaded) {
         syncAllChannels(false);
     }
 }
 
 // Initialize application
 function initApp() {
-    // Wait for Google Identity Services to load
+    setupEventListeners();
+    waitForGoogleAuth();
+}
+
+// Wait for Google Identity Services to load, then restore the session
+function waitForGoogleAuth() {
     if (typeof google !== 'undefined' && google.accounts) {
         initializeGoogleAuth();
-        
+
         // Try to restore session from localStorage
         restoreSession();
     } else {
-        setTimeout(initApp, 100);
+        setTimeout(waitForGoogleAuth, 100);
     }
-    
+}
+
+// Setup button event listeners
+function setupEventListeners() {
     // Setup sign out button
     const signOutButton = document.getElementById('signout-button');
     if (signOutButton) {
@@ -817,29 +823,28 @@ function renderFilterButtons() {
     if (!filterContainer) return;
     
     filterContainer.innerHTML = '';
-    
+
     // "All" button
-    const allButton = document.createElement('button');
-    allButton.className = 'filter-button active';
-    allButton.textContent = 'Tous';
-    allButton.onclick = () => {
-        setActiveFilter(allButton);
-        renderVideoFeed(null);
-    };
-    filterContainer.appendChild(allButton);
-    
+    filterContainer.appendChild(createFilterButton('Tous', null));
+
     // Group buttons
     const groups = getUserGroups();
     Object.keys(groups).forEach(groupName => {
-        const button = document.createElement('button');
-        button.className = 'filter-button';
-        button.textContent = groupName;
-        button.onclick = () => {
-            setActiveFilter(button);
-            renderVideoFeed(groupName);
-        };
-        filterContainer.appendChild(button);
+        filterContainer.appendChild(createFilterButton(groupName, groupName));
     });
+}
+
+// Create a filter button (groupName null = all videos)
+function createFilterButton(label, groupName) {
+    const button = document.createElement('button');
+    button.className = groupName === activeGroup ? 'filter-button active' : 'filter-button';
+    button.textContent = label;
+    button.onclick = () => {
+        activeGroup = groupName;
+        setActiveFilter(button);
+        renderVideoFeed();
+    };
+    return button;
 }
 
 // Set active filter button
