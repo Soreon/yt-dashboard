@@ -148,7 +148,7 @@ button.secondary-button:hover,
     gap: 24px;
 }
 
-.video-card, .channel-card {
+.video-card {
     background-color: var(--card-background);
     border-radius: var(--border-radius);
     overflow: hidden;
@@ -161,14 +161,14 @@ button.secondary-button:hover,
 }
 
 /* Effet de bordure rouge au survol (comme sur l'image) */
-.video-card:hover, .channel-card:hover {
+.video-card:hover {
     transform: translateY(-6px);
     border-color: var(--primary-color);
     box-shadow: var(--primary-glow);
     z-index: 2;
 }
 
-.video-thumbnail, .channel-thumbnail {
+.video-thumbnail {
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
@@ -176,7 +176,7 @@ button.secondary-button:hover,
     display: block;
 }
 
-.video-info, .channel-info {
+.video-info {
     padding: 20px;
     flex: 1;
     display: flex;
@@ -184,7 +184,7 @@ button.secondary-button:hover,
     justify-content: space-between;
 }
 
-.video-title, .channel-title {
+.video-title {
     font-weight: 700;
     font-size: 1.1rem;
     margin-bottom: 8px;

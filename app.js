@@ -73,12 +73,6 @@ function handleAuthResponse(response) {
     loadSubscriptions();
 }
 
-// Global callback for button sign-in
-window.handleCredentialResponse = function(response) {
-    // This is for the One Tap sign-in, but we're using token model
-    console.log('Credential response received');
-};
-
 // Request access token
 function requestAccessToken() {
     if (accessToken) {
@@ -589,8 +583,7 @@ function getRelativeTime(dateString) {
 // Render video feed, filtered by the active group
 function renderVideoFeed() {
     const videoCache = getVideoCache();
-    const playlistCache = getPlaylistCache();
-    
+
     // Flatten all videos with channel info
     const allVideos = [];
     
@@ -674,45 +667,6 @@ function createVideoCard(video) {
     return card;
 }
 
-// Create channel card element
-function createChannelCard(subscription, playlistCache) {
-    const channelId = subscription.snippet.resourceId.channelId;
-    const playlistId = playlistCache[channelId];
-    const isCached = playlistCache.hasOwnProperty(channelId);
-    
-    const card = document.createElement('div');
-    card.className = 'channel-card';
-    card.onclick = () => {
-        if (playlistId && isValidYouTubeId(playlistId)) {
-            window.open(`https://www.youtube.com/playlist?list=${playlistId}`, '_blank');
-        } else if (isValidYouTubeId(channelId)) {
-            window.open(`https://www.youtube.com/channel/${channelId}`, '_blank');
-        }
-    };
-    
-    const thumbnail = subscription.snippet.thumbnails?.medium?.url || 
-                      subscription.snippet.thumbnails?.default?.url || '';
-    const avatar = subscription.snippet.thumbnails?.default?.url || '';
-    const title = subscription.snippet.title || 'Unknown Channel';
-    
-    card.innerHTML = `
-        <img class="channel-thumbnail" src="${escapeHtml(thumbnail)}" alt="${escapeHtml(title)}" loading="lazy">
-        <div class="channel-info">
-            <img class="channel-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(title)}" loading="lazy">
-            <div class="channel-details">
-                <div class="channel-title">${escapeHtml(title)}</div>
-            </div>
-        </div>
-        <div class="channel-meta">
-            ${playlistId ? `<span class="playlist-indicator ${isCached ? 'cached' : ''}">
-                ${isCached ? '✓ Cached' : 'Playlist ID'}
-            </span>` : ''}
-        </div>
-    `;
-    
-    return card;
-}
-
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -761,7 +715,7 @@ async function loadSubscriptions() {
         renderVideoFeed();
 
         // Fetch channel details in batches
-        const playlistCache = await fetchChannelDetails(channelIds);
+        await fetchChannelDetails(channelIds);
         
         // Update statistics
         const videoCache = getVideoCache();
