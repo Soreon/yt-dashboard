@@ -78,7 +78,8 @@ function requestAccessToken() {
     if (accessToken) {
         loadSubscriptions();
     } else if (tokenClient) {
-        tokenClient.requestAccessToken({ prompt: 'consent' });
+        // Empty prompt: the consent screen is only shown the first time
+        tokenClient.requestAccessToken({ prompt: '' });
     } else {
         showError('Le service Google n\'est pas encore chargé, réessayez dans un instant.');
     }
@@ -109,11 +110,9 @@ function restoreSession() {
             accessToken = authData.access_token;
             updateAuthUI(true);
             loadSubscriptions();
-        } else {
-            // Token is expired, clean up
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            accessToken = null;
         }
+        // An expired token is kept: it marks that the user did not sign out,
+        // so the cached feed stays visible until they reconnect
     } catch (error) {
         console.error('Error restoring session:', error);
         // Clean up on error
@@ -144,8 +143,7 @@ function updateAuthUI(isAuthenticated) {
     const signOutButton = document.getElementById('signout-button');
     const forceSyncButton = document.getElementById('force-sync-button');
     const manageGroupsButton = document.getElementById('manage-groups-button');
-    const filtersBar = document.getElementById('filters-bar');
-    
+
     if (authButton) {
         // Si connecté, on cache le bouton de connexion, sinon on l'affiche
         authButton.style.display = isAuthenticated ? 'none' : 'inline-block';
@@ -160,8 +158,14 @@ function updateAuthUI(isAuthenticated) {
     if (manageGroupsButton) {
         manageGroupsButton.style.display = isAuthenticated ? 'inline-block' : 'none';
     }
-    if (filtersBar) {
-        filtersBar.style.display = isAuthenticated ? 'block' : 'none';
+}
+
+// Whether the user signed in before and did not sign out
+function hasStoredSession() {
+    try {
+        return localStorage.getItem(AUTH_STORAGE_KEY) !== null;
+    } catch (error) {
+        return false;
     }
 }
 
@@ -174,12 +178,15 @@ function setLoading(isLoading) {
 }
 
 // Show error message
+let errorTimeout = null;
 function showError(message) {
     const errorEl = document.getElementById('error-message');
     if (errorEl) {
         errorEl.textContent = message;
         errorEl.style.display = 'block';
-        setTimeout(() => {
+        // Restart the timer so a new message is not hidden by an older one
+        clearTimeout(errorTimeout);
+        errorTimeout = setTimeout(() => {
             errorEl.style.display = 'none';
         }, 5000);
     }
@@ -190,8 +197,16 @@ function showError(message) {
 function clearUI() {
     const grid = document.getElementById('subscriptions-grid');
     const stats = document.getElementById('stats');
+    const filtersBar = document.getElementById('filters-bar');
     if (grid) grid.innerHTML = '';
     if (stats) stats.style.display = 'none';
+    if (filtersBar) filtersBar.style.display = 'none';
+}
+
+// Show the cached feed without calling the API
+function showCachedFeed() {
+    renderFilterButtons();
+    renderVideoFeed();
 }
 
 // Authenticated GET on the YouTube Data API
@@ -213,10 +228,11 @@ async function apiFetch(url) {
     return response.json();
 }
 
-// Handle an expired or revoked access token
+// Handle an expired or revoked access token: keep the cached feed visible
 function handleSessionExpired() {
-    showError('Session expirée. Veuillez vous reconnecter.');
-    signOut();
+    accessToken = null;
+    updateAuthUI(false);
+    showError('Session expirée. Reconnectez-vous pour mettre à jour le flux.');
 }
 
 // Fetch all subscriptions recursively
@@ -612,27 +628,32 @@ function renderVideoFeed() {
         return dateB - dateA;
     });
     
+    // Update stats
+    const statsEl = document.getElementById('stats');
+    const subCountEl = document.getElementById('sub-count');
+    const videoCountEl = document.getElementById('video-count');
+    if (statsEl) statsEl.style.display = 'flex';
+    if (subCountEl) subCountEl.textContent = Object.keys(getChannelNames()).length;
+    if (videoCountEl) videoCountEl.textContent = filteredVideos.length;
+
     // Render videos
     const grid = document.getElementById('subscriptions-grid');
     if (!grid) return;
-    
+
     grid.innerHTML = '';
-    
+
     if (filteredVideos.length === 0) {
-        grid.innerHTML = '<div class="no-videos">Aucune vidéo disponible. Cliquez sur "Forcer la synchro" pour récupérer les dernières vidéos.</div>';
+        const hint = accessToken
+            ? 'Cliquez sur "Forcer la synchro" pour récupérer les dernières vidéos.'
+            : 'Connectez-vous pour récupérer les dernières vidéos.';
+        grid.innerHTML = `<div class="no-videos">Aucune vidéo disponible. ${hint}</div>`;
         return;
     }
-    
+
     filteredVideos.forEach(video => {
         const card = createVideoCard(video);
         grid.appendChild(card);
     });
-    
-    // Update stats
-    const statsEl = document.getElementById('stats');
-    const videoCountEl = document.getElementById('video-count');
-    if (statsEl) statsEl.style.display = 'flex';
-    if (videoCountEl) videoCountEl.textContent = filteredVideos.length;
 }
 
 // Create video card element
@@ -674,17 +695,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Update statistics display
-function updateStats(subscriptionCount, videoCount) {
-    const statsEl = document.getElementById('stats');
-    const subCountEl = document.getElementById('sub-count');
-    const videoCountEl = document.getElementById('video-count');
-    
-    if (statsEl) statsEl.style.display = 'flex';
-    if (subCountEl) subCountEl.textContent = subscriptionCount;
-    if (videoCountEl) videoCountEl.textContent = videoCount;
-}
-
 // Load and display subscriptions
 async function loadSubscriptions() {
     setLoading(true);
@@ -716,15 +726,7 @@ async function loadSubscriptions() {
 
         // Fetch channel details in batches
         await fetchChannelDetails(channelIds);
-        
-        // Update statistics
-        const videoCache = getVideoCache();
-        let videoCount = 0;
-        for (const channelId in videoCache) {
-            videoCount += (videoCache[channelId] || []).length;
-        }
-        updateStats(subscriptions.length, videoCount);
-        
+
         // Initialize filter buttons
         renderFilterButtons();
         loaded = true;
@@ -749,6 +751,12 @@ async function loadSubscriptions() {
 function initApp() {
     migrateVideoCache();
     setupEventListeners();
+
+    // Show the cached feed right away, unless the user signed out
+    if (hasStoredSession()) {
+        showCachedFeed();
+    }
+
     waitForGoogleAuth();
 }
 
@@ -811,7 +819,10 @@ function setupEventListeners() {
 function renderFilterButtons() {
     const filterContainer = document.getElementById('filter-buttons');
     if (!filterContainer) return;
-    
+
+    const filtersBar = document.getElementById('filters-bar');
+    if (filtersBar) filtersBar.style.display = 'block';
+
     filterContainer.innerHTML = '';
 
     // "All" button
