@@ -7,7 +7,7 @@ import {
 import {
     applyVideoDetails, buildFeed, keepChannels, matchesSearch, mergeChannelVideos, videosMissingDetails
 } from './feed.js';
-import { openGroupsModal, setupGroupsModal } from './groups.js';
+import { groupsRouteFromHash, renderGroupsPage, setupGroupsPage } from './groups.js';
 import {
     groupByDay, historyEntries, importWatches, markWatched, parseTakeoutHistory, unmarkWatched
 } from './history-model.js';
@@ -33,7 +33,7 @@ let tokenClient = null;
 let isSyncing = false;
 let activeGroup = null; // Group currently used to filter the feed (null = all)
 let searchQuery = ''; // Text typed in the search box
-let currentView = 'feed'; // 'feed' or 'history'
+let currentView = 'feed'; // 'feed', 'groups' or 'history'
 let watchedSinceRender = false; // Videos opened since the last render, hidden when coming back
 
 // Initialize Google Identity Services
@@ -243,7 +243,7 @@ async function syncAllChannels(force = false, { background = false } = {}) {
         if (background && hasNewVideos && currentView === 'feed' && window.scrollY > SCROLLED_DOWN_PX) {
             showNewVideosPill(showNewVideos);
         } else {
-            renderVideoFeed();
+            renderView();
         }
         refreshFilterButtons();
 
@@ -298,7 +298,7 @@ async function loadSubscriptions() {
         saveChannelNames(channelNames);
         saveChannelAvatars(channelAvatars);
         pruneUnsubscribedChannels(channelIds);
-        renderVideoFeed();
+        renderView(); // The groups page shows the subscriptions too
 
         // Fetch channel details in batches
         await updatePlaylistCache(channelIds);
@@ -367,21 +367,36 @@ function renderHistoryView() {
 function renderView() {
     if (currentView === 'history') {
         renderHistoryView();
+    } else if (currentView === 'groups') {
+        renderGroupsPage(groupsRouteFromHash(location.hash), searchQuery);
     } else {
         renderVideoFeed();
     }
 }
 
-// Route: "#historique" shows the history page, anything else the feed
+const SEARCH_PLACEHOLDERS = {
+    feed: 'Rechercher dans le fil',
+    groups: 'Rechercher dans les groupes',
+    history: 'Rechercher dans l\'historique'
+};
+
+// Route: "#historique" shows the history page, "#groupes", "#groupe/<nom>" and "#sans-groupe"
+// the groups page, anything else the feed
 function showViewFromHash() {
-    currentView = location.hash === '#historique' ? 'history' : 'feed';
+    if (location.hash === '#historique') {
+        currentView = 'history';
+    } else if (groupsRouteFromHash(location.hash)) {
+        currentView = 'groups';
+    } else {
+        currentView = 'feed';
+    }
     setActiveView(currentView);
 
     // Each page has its own search, like YouTube's history search
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = '';
-        searchInput.placeholder = currentView === 'history' ? 'Rechercher dans l\'historique' : 'Rechercher dans le fil';
+        searchInput.placeholder = SEARCH_PLACEHOLDERS[currentView];
         searchInput.setAttribute('aria-label', searchInput.placeholder);
     }
     searchQuery = '';
@@ -522,7 +537,7 @@ function initApp() {
         renderAccount(getAccount());
         showCachedFeed();
     }
-    if (location.hash === '#historique') {
+    if (location.hash && location.hash !== '#') {
         showViewFromHash();
     }
 
@@ -547,7 +562,6 @@ function setupEventListeners() {
     document.getElementById('signout-button')?.addEventListener('click', signOut);
     document.getElementById('authorize-button')?.addEventListener('click', requestAccessToken);
     document.getElementById('force-sync-button')?.addEventListener('click', () => syncAllChannels(true));
-    document.getElementById('manage-groups-button')?.addEventListener('click', openGroupsModal);
     setupAccountMenu();
 
     // Menu button: collapse / expand the left navigation (remembered)
@@ -584,14 +598,22 @@ function setupEventListeners() {
         searchInput?.blur();
     });
 
-    // Keep the active filter on a renamed group, drop it if the group was deleted
-    // (from: null for a created or imported group)
-    setupGroupsModal(({ from, to }) => {
-        if (from !== null && activeGroup === from) {
-            activeGroup = to;
+    setupGroupsPage({
+        // Keep the active filter on a renamed group, drop it if the group was deleted
+        // (from: null for a created or imported group)
+        onGroupsChanged({ from, to }) {
+            if (from !== null && activeGroup === from) {
+                activeGroup = to;
+            }
+            refreshFilterButtons();
+            if (currentView === 'feed') renderVideoFeed();
+        },
+        // "Voir le fil" on a group: the feed, filtered on it
+        onShowFeed(groupName) {
+            activeGroup = groupName;
+            refreshFilterButtons();
+            location.hash = '';
         }
-        refreshFilterButtons();
-        renderVideoFeed();
     });
 }
 

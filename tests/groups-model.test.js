@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { exportGroups, mergeGroups, parseGroupsFile, removeGroup, upsertGroup } from '../js/groups-model.js';
+import {
+    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, mergeGroups, parseGroupsFile,
+    removeFromGroup, removeGroup, renameGroup, ungroupedChannels, upsertGroup
+} from '../js/groups-model.js';
 
 const groups = { Tech: ['A', 'B'], Musique: ['C'], Jeux: ['D'] };
 
@@ -25,9 +28,12 @@ test('upsertGroup renames a group in place', () => {
     assert.deepEqual(result.Concerts, ['C']);
 });
 
-test('upsertGroup refuses an empty name, no channel, or a name already taken', () => {
+test('upsertGroup accepts a group without channel yet, created from the groups page', () => {
+    assert.deepEqual(upsertGroup(groups, { name: 'Vide', channelIds: [] }).groups.Vide, []);
+});
+
+test('upsertGroup refuses an empty name or a name already taken', () => {
     assert.match(upsertGroup(groups, { name: '   ', channelIds: ['A'] }).error, /nom de groupe/);
-    assert.match(upsertGroup(groups, { name: 'Vide', channelIds: [] }).error, /au moins une chaîne/);
     assert.match(upsertGroup(groups, { name: 'Tech', channelIds: ['A'] }).error, /existe déjà/);
     assert.match(upsertGroup(groups, { originalName: 'Jeux', name: 'Tech', channelIds: ['D'] }).error, /existe déjà/);
 });
@@ -96,4 +102,43 @@ test('mergeGroups adds new groups and completes existing ones without removing a
     assert.equal(added, 1);
     assert.equal(completed, 1);
     assert.deepEqual(groups.Tech, ['A', 'B'], 'the original groups are not modified');
+});
+
+test('renameGroup keeps the channels and the position, and refuses a taken name', () => {
+    const { groups: renamed } = renameGroup(groups, 'Musique', 'Sons');
+    assert.deepEqual(Object.entries(renamed), [['Tech', ['A', 'B']], ['Sons', ['C']], ['Jeux', ['D']]]);
+    assert.match(renameGroup(groups, 'Musique', 'Tech').error, /existe déjà/);
+});
+
+test('addToGroup adds channels once, and a channel may be in several groups', () => {
+    const result = addToGroup(groups, 'Tech', ['B', 'C', 'C']);
+    assert.deepEqual(result.Tech, ['A', 'B', 'C']);
+    assert.deepEqual(result.Musique, ['C']);
+    assert.deepEqual(groups.Tech, ['A', 'B'], 'the original groups are not modified');
+});
+
+test('removeFromGroup removes one channel from one group only', () => {
+    const result = removeFromGroup(addToGroup(groups, 'Tech', ['C']), 'Tech', 'C');
+    assert.deepEqual(result.Tech, ['A', 'B']);
+    assert.deepEqual(result.Musique, ['C']);
+    assert.equal(removeFromGroup(groups, 'Inconnu', 'A'), groups);
+});
+
+test('groupsOfChannel and ungroupedChannels', () => {
+    const multi = addToGroup(groups, 'Jeux', ['C']);
+    assert.deepEqual(groupsOfChannel(multi, 'C'), ['Musique', 'Jeux']);
+    assert.deepEqual(groupsOfChannel(multi, 'Z'), []);
+    assert.deepEqual(ungroupedChannels(groups, ['A', 'C', 'X', 'Y']), ['X', 'Y']);
+});
+
+test('channelActivity and groupActivity read the latest video and the unwatched count from the cache', () => {
+    const cache = {
+        A: [{ videoId: 'a1', publishedAt: '2026-09-01T00:00:00Z' }, { videoId: 'a2', publishedAt: '2026-09-20T00:00:00Z' }],
+        B: [{ videoId: 'b1', publishedAt: '2026-05-01T00:00:00Z' }]
+    };
+    const history = { a2: { watchedAt: 1 } };
+    assert.deepEqual(channelActivity('A', cache, history), { lastUpload: '2026-09-20T00:00:00Z', unwatched: 1 });
+    assert.deepEqual(channelActivity('Z', cache, history), { lastUpload: null, unwatched: 0 });
+    assert.deepEqual(groupActivity(['A', 'B', 'Z'], cache, history), { lastUpload: '2026-09-20T00:00:00Z', unwatched: 2 });
+    assert.deepEqual(groupActivity([], cache, history), { lastUpload: null, unwatched: 0 });
 });

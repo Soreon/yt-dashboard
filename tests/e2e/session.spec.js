@@ -47,8 +47,8 @@ test('buttons are wired once, even when the Google script loads late', async ({ 
     await openApp(page, expiredSessionWithCache());
 
     const counts = await page.evaluate(() => window.__listenerCounts);
-    for (const id of ['authorize-button', 'signout-button', 'force-sync-button', 'manage-groups-button',
-        'guide-button', 'account-button', 'new-group', 'save-group', 'import-history']) {
+    for (const id of ['authorize-button', 'signout-button', 'force-sync-button', 'guide-button', 'account-button',
+        'new-group', 'add-selected', 'delete-group', 'import-history']) {
         expect(counts[`${id} click`], id).toBe(1);
     }
     expect(counts['search-input input']).toBe(1);

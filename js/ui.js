@@ -270,10 +270,11 @@ export function renderHistory(dayGroups, emptyMessage, channelAvatars = {}, hand
     });
 }
 
-// Show the feed or the history page, and highlight it in the navigation
+// Show the feed, the groups or the history page, and highlight it in the navigation
 export function setActiveView(view) {
-    document.getElementById('feed-view').hidden = view !== 'feed';
-    document.getElementById('history-view').hidden = view !== 'history';
+    ['feed', 'groups', 'history'].forEach(name => {
+        document.getElementById(`${name}-view`).hidden = name !== view;
+    });
 
     document.querySelectorAll('.nav-link').forEach(link => {
         const active = link.dataset.view === view;

@@ -39,9 +39,9 @@
             <button id="force-sync-button" class="icon-button" aria-label="Forcer la synchro" title="Forcer la synchro" style="display: none;">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
             </button>
-            <button id="manage-groups-button" class="icon-button" aria-label="Gérer les groupes" title="Gérer les groupes" style="display: none;">
+            <a id="manage-groups-button" class="icon-button" href="#groupes" aria-label="Gérer les groupes" title="Gérer les groupes" style="display: none;">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/></svg>
-            </button>
+            </a>
             <button id="authorize-button" class="signin-button">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2a7.2 7.2 0 0 1-6-3.22c.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08a7.2 7.2 0 0 1-6 3.22z"/></svg>
                 <span>Se connecter</span>
@@ -68,6 +68,10 @@
         <a class="guide-item nav-link active" href="#" data-view="feed" aria-current="page">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             <span class="guide-label">Accueil</span>
+        </a>
+        <a class="guide-item nav-link" href="#groupes" data-view="groups">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/></svg>
+            <span class="guide-label">Groupes</span>
         </a>
         <a class="guide-item nav-link" href="#historique" data-view="history">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
@@ -116,6 +120,85 @@
 
             <div id="history-list" class="history-list"></div>
         </section>
+
+        <!-- Groups page: overview (cards), one group (its channels), or the channels without group -->
+        <section id="groups-view" class="groups-page" hidden>
+            <div id="groups-overview">
+                <div class="page-header">
+                    <h1 class="page-title">Groupes</h1>
+                    <div class="page-actions">
+                        <button id="export-groups" class="secondary-button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            <span>Exporter</span>
+                        </button>
+                        <button id="import-groups" class="secondary-button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                            <span>Importer</span>
+                        </button>
+                        <input type="file" id="import-groups-file" accept=".json,application/json" hidden>
+                        <button id="new-group" class="primary-button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                            <span>Nouveau groupe</span>
+                        </button>
+                    </div>
+                </div>
+
+                <form id="new-group-form" class="inline-form" hidden>
+                    <input type="text" id="new-group-name" class="text-field" placeholder="Nom du groupe" maxlength="60" autocomplete="off">
+                    <button type="submit" id="create-group" class="primary-button">Créer</button>
+                    <button type="button" id="cancel-new-group" class="secondary-button">Annuler</button>
+                </form>
+
+                <div id="groups-grid" class="groups-grid"></div>
+
+                <a id="ungrouped-link" class="ungrouped-link" href="#sans-groupe">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+                    <span>Sans groupe · <span id="ungrouped-count">0</span> chaînes</span>
+                </a>
+            </div>
+
+            <div id="group-detail" hidden>
+                <a class="back-link" href="#groupes">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    <span>Groupes</span>
+                </a>
+                <div class="page-header">
+                    <div class="group-heading">
+                        <h1 id="group-title" class="page-title"></h1>
+                        <form id="rename-form" class="inline-form" hidden>
+                            <input type="text" id="rename-input" class="text-field" maxlength="60" autocomplete="off" aria-label="Nouveau nom">
+                            <button type="submit" class="primary-button">Enregistrer</button>
+                            <button type="button" id="cancel-rename" class="secondary-button">Annuler</button>
+                        </form>
+                        <p id="group-meta" class="group-meta"></p>
+                    </div>
+                    <div id="group-actions" class="page-actions">
+                        <button id="show-group-feed" class="secondary-button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                            <span>Voir le fil</span>
+                        </button>
+                        <button id="add-channels" class="primary-button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                            <span>Ajouter des chaînes</span>
+                        </button>
+                        <button id="rename-group" class="secondary-button">Renommer</button>
+                        <button id="delete-group" class="text-button danger-button">Supprimer</button>
+                    </div>
+                </div>
+
+                <div id="add-panel" class="add-panel" hidden>
+                    <input type="search" id="channel-search" class="text-field" placeholder="Rechercher une chaîne à ajouter" autocomplete="off">
+                    <div id="channel-list" class="channel-list"></div>
+                    <div class="add-panel-actions">
+                        <span id="selected-count" class="group-meta">aucune sélectionnée</span>
+                        <button id="cancel-add" class="secondary-button">Fermer</button>
+                        <button id="add-selected" class="primary-button">Ajouter la sélection</button>
+                    </div>
+                </div>
+
+                <div id="group-channels" class="channel-rows"></div>
+            </div>
+        </section>
     </main>
 
     <!-- Bottom navigation on phones, like m.youtube.com -->
@@ -124,6 +207,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             <span>Accueil</span>
         </a>
+        <a class="pivot-item nav-link" href="#groupes" data-view="groups">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/></svg>
+            <span>Groupes</span>
+        </a>
         <a class="pivot-item nav-link" href="#historique" data-view="history">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
             <span>Historique</span>
@@ -131,59 +218,6 @@
     </nav>
 
     <div id="error-message" class="toast" role="status" style="display: none;"></div>
-
-    <!-- Groups Management Modal: list of groups, or the editor of one group -->
-    <div id="groups-modal" class="modal" style="display: none;">
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="groups-modal-title">
-            <div class="modal-header">
-                <h2 id="groups-modal-title">Gérer les groupes</h2>
-                <button id="close-modal" class="icon-button close-button" aria-label="Fermer" title="Fermer">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
-
-            <div id="groups-list-view" class="modal-body">
-                <div class="groups-toolbar">
-                    <button id="export-groups" class="secondary-button">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                        <span>Exporter</span>
-                    </button>
-                    <button id="import-groups" class="secondary-button">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-                        <span>Importer</span>
-                    </button>
-                    <input type="file" id="import-groups-file" accept=".json,application/json" hidden>
-                </div>
-                <ul id="groups-list" class="groups-list"></ul>
-            </div>
-
-            <div id="group-editor" class="modal-body" hidden>
-                <div class="form-group">
-                    <label for="group-name">Nom du groupe</label>
-                    <input type="text" id="group-name" class="text-field" placeholder="Ex : Tech, Musique, Jeux vidéo…" maxlength="60">
-                </div>
-                <div class="form-group">
-                    <label for="channel-search">Chaînes · <span id="selected-count">aucune sélectionnée</span></label>
-                    <input type="search" id="channel-search" class="text-field channel-search" placeholder="Rechercher une chaîne" autocomplete="off">
-                    <div id="channel-list" class="channel-list"></div>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <div id="list-actions" class="footer-actions">
-                    <button id="new-group" class="primary-button">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                        <span>Nouveau groupe</span>
-                    </button>
-                </div>
-                <div id="editor-actions" class="footer-actions" hidden>
-                    <button id="delete-group" class="text-button danger-button" hidden>Supprimer</button>
-                    <button id="cancel-group" class="secondary-button">Annuler</button>
-                    <button id="save-group" class="primary-button">Créer le groupe</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="js/main.js" type="module"></script>
 </body>

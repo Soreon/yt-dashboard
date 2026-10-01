@@ -14,10 +14,6 @@ export function upsertGroup(groups, { originalName = null, name, channelIds }) {
         return { error: 'Veuillez entrer un nom de groupe' };
     }
 
-    if (channelIds.length === 0) {
-        return { error: 'Veuillez sélectionner au moins une chaîne' };
-    }
-
     if (groupName !== originalName && Object.hasOwn(groups, groupName)) {
         return { error: `Un groupe nommé « ${groupName} » existe déjà` };
     }
@@ -37,6 +33,60 @@ export function upsertGroup(groups, { originalName = null, name, channelIds }) {
 // Copy of the groups without the given one
 export function removeGroup(groups, name) {
     return Object.fromEntries(Object.entries(groups).filter(([groupName]) => groupName !== name));
+}
+
+// Rename a group, keeping its channels and its position
+export function renameGroup(groups, from, to) {
+    return upsertGroup(groups, { originalName: from, name: to, channelIds: groups[from] || [] });
+}
+
+// Copy of the groups with channels added to one (a channel may belong to several groups)
+export function addToGroup(groups, name, channelIds) {
+    const existing = groups[name] || [];
+    return { ...groups, [name]: [...new Set([...existing, ...channelIds])] };
+}
+
+// Copy of the groups with a channel removed from one
+export function removeFromGroup(groups, name, channelId) {
+    if (!groups[name]) return groups;
+    return { ...groups, [name]: groups[name].filter(id => id !== channelId) };
+}
+
+// Names of the groups a channel belongs to, in the groups order
+export function groupsOfChannel(groups, channelId) {
+    return Object.entries(groups).filter(([, ids]) => ids.includes(channelId)).map(([name]) => name);
+}
+
+// Subscribed channels (channelIds) that belong to no group
+export function ungroupedChannels(groups, channelIds) {
+    const grouped = new Set(Object.values(groups).flat());
+    return channelIds.filter(id => !grouped.has(id));
+}
+
+// What the cache knows about a channel: date of its latest video, and videos not watched yet
+export function channelActivity(channelId, videoCache, history) {
+    let lastUpload = null;
+    let unwatched = 0;
+
+    (videoCache[channelId] || []).forEach(video => {
+        if (video.publishedAt && (!lastUpload || video.publishedAt > lastUpload)) {
+            lastUpload = video.publishedAt;
+        }
+        if (!history[video.videoId]) unwatched++;
+    });
+
+    return { lastUpload, unwatched };
+}
+
+// Same for a whole group: latest video of any channel, sum of unwatched videos
+export function groupActivity(channelIds, videoCache, history) {
+    return channelIds.reduce((total, channelId) => {
+        const { lastUpload, unwatched } = channelActivity(channelId, videoCache, history);
+        return {
+            lastUpload: lastUpload && (!total.lastUpload || lastUpload > total.lastUpload) ? lastUpload : total.lastUpload,
+            unwatched: total.unwatched + unwatched
+        };
+    }, { lastUpload: null, unwatched: 0 });
 }
 
 // Content of a groups file: each group with its channels (ID, and name so the file is readable)

@@ -7,7 +7,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 - **Connexion Google** via Google Identity Services (OAuth 2.0, *token model*) : aucun secret côté serveur.
 - **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts.
 - **Synchronisation** : au chargement, puis automatiquement tant que l'onglet est ouvert (au plus toutes les 30 minutes), ou à la demande.
-- **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe.
+- **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe. Une page dédiée montre chaque groupe (chaînes, vidéos non vues, dernière vidéo), les chaînes sans groupe, et permet d'ajouter une chaîne à plusieurs groupes.
 - **Vidéos vues** : une vidéo ouverte depuis le fil, ou marquée comme vue, n'y apparaît plus.
 - **Historique** des vidéos vues, regroupées par jour, avec recherche, et import de votre historique YouTube (Google Takeout).
 - **Recherche** dans le fil, par titre ou nom de chaîne.
@@ -51,9 +51,9 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 
 - **Se connecter à YouTube** : autorise l'accès en lecture seule à vos abonnements (`youtube.readonly`). L'écran de consentement n'apparaît que la première fois.
 - **Synchroniser** (icône ⟳ en haut à droite) : récupère immédiatement les dernières vidéos.
-- **Gérer les groupes** (icône à côté) : liste de vos groupes, avec « Nouveau groupe », la modification (nom et chaînes) et la suppression. La recherche de l'éditeur retrouve vite une chaîne parmi vos abonnements. Deux groupes ne peuvent pas porter le même nom ; un groupe renommé reste sélectionné dans les filtres.
-- **Exporter / importer les groupes** (fenêtre des groupes) : « Exporter » télécharge un fichier JSON avec vos groupes et le nom de leurs chaînes ; « Importer » l'ajoute aux groupes d'un autre appareil ou navigateur. Un groupe importé qui porte le nom d'un groupe existant le complète avec les chaînes qui lui manquent : rien n'est supprimé.
-- **Rechercher** : la barre du haut filtre le fil au fil de la frappe (titre ou chaîne, sans tenir compte des accents ni des majuscules).
+- **Groupes** (menu latéral, ou icône à côté de la synchro) : une carte par groupe, avec ses chaînes en mosaïque, le nombre de vidéos non vues et la date de sa dernière vidéo ; « Nouveau groupe » crée un groupe puis ouvre le choix des chaînes. Cliquer sur un groupe affiche ses chaînes (dernière vidéo, non-vues, autres groupes de la chaîne) ; chaque ligne a un menu « Ajouter à… » et « Retirer du groupe ». Une chaîne peut être dans plusieurs groupes. Le groupe se renomme, se supprime, et « Voir le fil » affiche le fil filtré dessus. « Sans groupe » liste les chaînes qui ne sont dans aucun groupe. Deux groupes ne peuvent pas porter le même nom ; un groupe renommé reste sélectionné dans les filtres.
+- **Exporter / importer les groupes** (page Groupes) : « Exporter » télécharge un fichier JSON avec vos groupes et le nom de leurs chaînes ; « Importer » l'ajoute aux groupes d'un autre appareil ou navigateur. Un groupe importé qui porte le nom d'un groupe existant le complète avec les chaînes qui lui manquent : rien n'est supprimé.
+- **Rechercher** : la barre du haut filtre la page affichée au fil de la frappe, sans tenir compte des accents ni des majuscules : le fil (titre ou chaîne), les groupes (nom du groupe ou d'une de ses chaînes) ou l'historique.
 - **Menu** (☰) : réduit ou déplie le menu latéral ; le choix est mémorisé.
 - **Vidéos vues** : ouvrir une vidéo (clic, clic molette) la marque comme vue. Sa carte reste affichée, grisée avec une barre rouge, pour ne pas décaler la grille pendant que vous en ouvrez plusieurs ; elle disparaît du fil quand vous revenez sur l'onglet. Le bouton ✓ d'une carte (au survol) la marque comme vue tout de suite, avec « Annuler » ; sur une carte grisée, il la remet en non vue.
 - **Historique** (menu latéral, ou barre du bas sur téléphone) : les vidéos vues, des plus récentes aux plus anciennes, regroupées par jour. La barre de recherche y filtre l'historique. La croix d'une vidéo la retire de l'historique (elle revient dans le fil) ; « Effacer tout l'historique » vide la liste. Les 500 dernières vidéos vues sont conservées.
@@ -89,9 +89,9 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/storage.js](js/storage.js) | Lecture et écriture du `localStorage` |
 | [js/feed.js](js/feed.js) | Logique pure du fil (fusion, tri, dates), sans DOM : testée unitairement |
 | [js/ui.js](js/ui.js) | Affichage du fil, des filtres, du compte et des messages |
-| [js/groups.js](js/groups.js) | Fenêtre de gestion des groupes (liste et éditeur) |
+| [js/groups.js](js/groups.js) | Page Groupes : vue d'ensemble, détail d'un groupe, chaînes sans groupe |
 | [js/history-model.js](js/history-model.js) | Vidéos vues, regroupement par jour et import Google Takeout, sans DOM : testée unitairement |
-| [js/groups-model.js](js/groups-model.js) | Création, renommage et suppression de groupes, sans DOM : testée unitairement |
+| [js/groups-model.js](js/groups-model.js) | Création, renommage, ajout et retrait de chaînes, activité des groupes, export et import, sans DOM : testée unitairement |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
 
