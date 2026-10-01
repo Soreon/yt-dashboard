@@ -1,7 +1,6 @@
 // YouTube Dashboard Application
 // Google Identity Services (Token Model) - No backend secret required
 
-const API_KEY = 'AIzaSyBjfBblUeW8XnRVLIQA1oK-btKUVXh0hOQ'; // Replace with your YouTube Data API key
 const CLIENT_ID = '595852680736-bde0rog3cine1u63lh1k3q53u1l5orlv.apps.googleusercontent.com'; // Replace with your OAuth Client ID
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 const BATCH_SIZE = 50;
@@ -420,7 +419,6 @@ async function fetchChannelDetails(channelIds) {
             const url = new URL('https://www.googleapis.com/youtube/v3/channels');
             url.searchParams.append('part', 'contentDetails');
             url.searchParams.append('id', batch.join(','));
-            url.searchParams.append('key', API_KEY);
 
             const data = await apiFetch(url);
 
@@ -552,7 +550,6 @@ async function fetchPlaylistVideos(playlistId) {
         url.searchParams.append('part', 'snippet');
         url.searchParams.append('playlistId', playlistId);
         url.searchParams.append('maxResults', '5');
-        url.searchParams.append('key', API_KEY);
 
         const data = await apiFetch(url);
         return data.items || [];
