@@ -60,13 +60,14 @@ test('buttons are wired once, even when the Google script loads late', async ({ 
 });
 
 test('the sign-in button waits for the Google script instead of failing', async ({ page, youtube }) => {
-    youtube.gisDelay = 1500;
+    // Late enough that the first click comes before it, even on a busy machine
+    youtube.gisDelay = 5000;
     await openApp(page, expiredSessionWithCache(), '/', { waitUntil: 'domcontentloaded' });
 
     await page.locator('#authorize-button').click();
     await expect(page.locator('#error-message')).toContainText('pas encore chargé');
 
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(() => window.google?.accounts);
     await page.locator('#authorize-button').click();
     await expect(page.locator('#account')).toBeVisible();
 });
