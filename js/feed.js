@@ -1,6 +1,8 @@
 // Feed logic: pure functions, without DOM or storage access (see tests/)
 
-import { MAX_VIDEOS_PER_CHANNEL } from './config.js';
+import {
+    CATCH_UP_AFTER_MS, CATCH_UP_VIDEOS, KEEP_UNWATCHED_MS, MAX_KEPT_PER_CHANNEL, MAX_VIDEOS_PER_CHANNEL, VIDEOS_PER_SYNC
+} from './config.js';
 
 // Validate YouTube ID format (alphanumeric, underscore, hyphen)
 export function isValidYouTubeId(id) {
@@ -28,8 +30,9 @@ export function toCachedVideo(item) {
     };
 }
 
-// Merge freshly fetched playlist items into a channel's cached videos
-export function mergeChannelVideos(items, cachedVideos = []) {
+// Merge freshly fetched playlist items into a channel's cached videos: the most recent ones, plus
+// the unwatched ones of the last weeks (isWatched(videoId)), so that none goes unseen
+export function mergeChannelVideos(items, cachedVideos = [], { isWatched = () => true, now = Date.now() } = {}) {
     const cachedById = new Map(cachedVideos.map(video => [video.videoId, video]));
 
     // Fresh snippet data wins, details already known (duration, views) are kept
@@ -42,7 +45,16 @@ export function mergeChannelVideos(items, cachedVideos = []) {
     // Keep older cached videos that were not returned again
     const olderVideos = cachedVideos.filter(video => !fetchedVideoIds.has(video.videoId));
 
-    return [...fetchedVideos, ...olderVideos].slice(0, MAX_VIDEOS_PER_CHANNEL);
+    const videos = [...fetchedVideos, ...olderVideos];
+    const unwatched = videos.slice(MAX_VIDEOS_PER_CHANNEL)
+        .filter(video => !isWatched(video.videoId) && now - Date.parse(video.publishedAt) < KEEP_UNWATCHED_MS);
+    return [...videos.slice(0, MAX_VIDEOS_PER_CHANNEL), ...unwatched].slice(0, MAX_KEPT_PER_CHANNEL);
+}
+
+// Number of videos to ask for a channel: more when it was last read long ago, so that nothing
+// published meanwhile is missed (a request costs the same whatever the number)
+export function videosToFetch(lastRead, now = Date.now()) {
+    return lastRead && now - lastRead > CATCH_UP_AFTER_MS ? CATCH_UP_VIDEOS : VIDEOS_PER_SYNC;
 }
 
 // IDs of cached videos whose details (duration, views) were never fetched

@@ -1,6 +1,8 @@
 // Global Video Feed - entry point: authentication, loading and sync
 
-import { AUTO_SYNC_CHECK_MS, CLIENT_ID, DRIVE_SCOPE, DRIVE_SYNC_DELAY_MS, SCOPES, SYNC_INTERVAL_MS } from './config.js';
+import {
+    AUTO_SYNC_CHECK_MS, CLIENT_ID, DETAILS_REFRESH_MS, DRIVE_SCOPE, DRIVE_SYNC_DELAY_MS, SCOPES, SYNC_INTERVAL_MS
+} from './config.js';
 import {
     AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchMyChannel, fetchUploadsPlaylists, fetchVideoDetails,
     QuotaError
@@ -8,8 +10,8 @@ import {
 import { DriveAccessError } from './drive.js';
 import { syncWithDrive } from './drive-sync.js';
 import {
-    applyVideoDetails, buildFeed, channelsDue, getRelativeTime, keepChannels, matchesSearch, mergeChannelVideos, nextQuotaReset,
-    quotaResetText, videosMissingDetails
+    applyVideoDetails, buildFeed, channelsDue, getRelativeTime, keepChannels, matchesSearch, mergeChannelVideos,
+    nextQuotaReset, quotaResetText, videosMissingDetails, videosToFetch
 } from './feed.js';
 import { groupsRouteFromHash, renderGroupsPage, setupGroupsPage } from './groups.js';
 import {
@@ -284,7 +286,8 @@ async function syncAllChannels(force = false, { background = false } = {}) {
     }
 
     // Only the channels whose wait is over (see channelSyncInterval)
-    const due = new Set(channelsDue(Object.keys(playlists), getVideoCache(), getChannelFetchedAt(), now));
+    const lastReads = getChannelFetchedAt();
+    const due = new Set(channelsDue(Object.keys(playlists), getVideoCache(), lastReads, now));
     const channels = Object.entries(playlists).filter(([channelId]) => due.has(channelId));
     if (channels.length === 0) {
         console.log('Sync skipped: no channel due');
@@ -306,7 +309,8 @@ async function syncAllChannels(force = false, { background = false } = {}) {
             return fallback;
         };
         const results = await Promise.all(
-            channels.map(([, playlistId]) => fetchLatestVideos(playlistId, accessToken).catch(unlessQuota(null)))
+            channels.map(([channelId, playlistId]) => fetchLatestVideos(playlistId, accessToken,
+                videosToFetch(lastReads[channelId], now)).catch(unlessQuota(null)))
         );
 
         // Every request failed: keep the previous timestamp so the next load retries
@@ -319,19 +323,25 @@ async function syncAllChannels(force = false, { background = false } = {}) {
             return;
         }
 
-        // Merge results into cache
+        // Merge results into cache, keeping the unwatched videos
         const videoCache = getVideoCache();
         const knownIds = new Set(buildFeed(videoCache).map(video => video.videoId));
+        const watched = watchedLookup(getWatchHistory(), getWatchedIds());
         results.forEach((videos, index) => {
             if (!videos || videos.length === 0) return;
 
             const [channelId] = channels[index];
-            videoCache[channelId] = mergeChannelVideos(videos, videoCache[channelId]);
+            videoCache[channelId] = mergeChannelVideos(videos, videoCache[channelId], {
+                isWatched: id => Boolean(watched[id]),
+                now
+            });
         });
 
-        // Durations and view counts: refresh the videos just fetched (recent, views still
-        // moving) and fill in any cached video that has none yet
-        const fetchedIds = results.filter(Boolean).flat().map(item => item.snippet?.resourceId?.videoId);
+        // Durations and view counts: refresh the recent videos just fetched (views still moving)
+        // and fill in any cached video that has none yet
+        const fetchedIds = results.filter(Boolean).flat()
+            .filter(item => now - Date.parse(item.snippet?.publishedAt) < DETAILS_REFRESH_MS)
+            .map(item => item.snippet?.resourceId?.videoId);
         const detailIds = [...new Set([...fetchedIds, ...videosMissingDetails(videoCache)])].filter(Boolean);
         const details = await fetchVideoDetails(detailIds, accessToken).catch(unlessQuota({}));
 
@@ -339,11 +349,10 @@ async function syncAllChannels(force = false, { background = false } = {}) {
         const updatedCache = applyVideoDetails(videoCache, details);
         storeVideoCache(updatedCache);
         saveLastSync(now);
-        const fetchedAt = getChannelFetchedAt();
         results.forEach((videos, index) => {
-            if (videos !== null) fetchedAt[channels[index][0]] = now;
+            if (videos !== null) lastReads[channels[index][0]] = now;
         });
-        saveChannelFetchedAt(fetchedAt);
+        saveChannelFetchedAt({ ...getChannelFetchedAt(), ...lastReads });
 
         console.log('Sync completed successfully');
 

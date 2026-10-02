@@ -106,6 +106,26 @@ test('a channel silent for a year is read once a week, the others at every sync'
     expect([reads('_A'), reads('_B'), reads('_C')]).toEqual([3, 3, 2]);
 });
 
+test('a channel read long ago is read further back, and its unwatched videos stay in the cache', async ({ page, youtube }) => {
+    await openApp(page, signedIn());
+    await expect(feedCards(page)).toHaveCount(15);
+    await waitForSync(page);
+
+    // Eight videos published on UC_A since its last read, a day and a half ago
+    for (let i = 1; i <= 8; i++) youtube.publishVideo(`missed_${i}`);
+    const fetchedAt = await readStorage(page, 'yt_channel_fetched_at');
+    await writeStorage(page, 'yt_channel_fetched_at', { ...fetchedAt, UC_A: Date.now() - 36 * HOUR });
+    await page.locator('#force-sync-button').click();
+    await waitForSync(page);
+
+    const asked = youtube.calls.filter(call => call.endpoint === 'playlistItems').slice(-3);
+    expect(asked.map(call => [call.params.playlistId, call.params.maxResults]).sort())
+        .toEqual([['UULF_A', '20'], ['UULF_B', '5'], ['UULF_C', '5']]);
+    expect(asked.every(call => call.params.fields.startsWith('items(snippet('))).toBe(true); // No descriptions
+    await expect(feedTitles(page).filter({ hasText: 'Nouvelle vidéo missed_' })).toHaveCount(8);
+    expect((await readStorage(page, 'yt_video_cache')).UC_A).toHaveLength(13); // Beyond 10: all unwatched
+});
+
 test('Shorts are left out, with a fallback when a long-form playlist is missing', async ({ page, youtube }) => {
     youtube.noLongForm.add('UC_C');
     await openApp(page, signedIn());

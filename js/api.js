@@ -131,22 +131,26 @@ export async function fetchVideoDetails(videoIds, token) {
     return details;
 }
 
+// Fields of a playlist item the cache keeps: the rest (descriptions above all) is not downloaded
+const PLAYLIST_ITEM_FIELDS = 'items(snippet(title,channelTitle,publishedAt,resourceId(videoId),'
+    + 'thumbnails(default(url),medium(url),high(url))))';
+
 // Latest items of a playlist
-async function fetchPlaylistItems(playlistId, token) {
-    const params = { part: 'snippet', playlistId, maxResults: String(VIDEOS_PER_SYNC) };
+async function fetchPlaylistItems(playlistId, token, count) {
+    const params = { part: 'snippet', playlistId, maxResults: String(count), fields: PLAYLIST_ITEM_FIELDS };
     const data = await apiFetch('playlistItems', params, token);
     return data.items || [];
 }
 
 // Latest videos of a channel without Shorts (null if the request failed)
-export async function fetchLatestVideos(uploadsPlaylistId, token) {
+export async function fetchLatestVideos(uploadsPlaylistId, token, count = VIDEOS_PER_SYNC) {
     try {
         try {
-            return await fetchPlaylistItems(longFormPlaylistId(uploadsPlaylistId), token);
+            return await fetchPlaylistItems(longFormPlaylistId(uploadsPlaylistId), token, count);
         } catch (error) {
             // No long-form playlist for this channel: fall back to all uploads, Shorts included
             if (error.status !== 404) throw error;
-            return await fetchPlaylistItems(uploadsPlaylistId, token);
+            return await fetchPlaylistItems(uploadsPlaylistId, token, count);
         }
     } catch (error) {
         if (error instanceof AuthError || error instanceof QuotaError) throw error;

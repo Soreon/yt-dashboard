@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MAX_VIDEOS_PER_CHANNEL } from '../js/config.js';
+import { CATCH_UP_VIDEOS, MAX_KEPT_PER_CHANNEL, MAX_VIDEOS_PER_CHANNEL, VIDEOS_PER_SYNC } from '../js/config.js';
 import {
     applyVideoDetails, buildFeed, channelsDue, channelSyncInterval, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
     longFormPlaylistId, matchesSearch, mergeChannelVideos, nextQuotaReset, normalizeText, parseIsoDuration,
-    quotaResetText, toCachedVideo, videosMissingDetails
+    quotaResetText, toCachedVideo, videosMissingDetails, videosToFetch
 } from '../js/feed.js';
 
 // playlistItems API item, as returned by the YouTube Data API
@@ -76,6 +76,30 @@ test('mergeChannelVideos caps the list and ignores items without video ID', () =
     assert.equal(merged.length, MAX_VIDEOS_PER_CHANNEL);
     assert.equal(merged[0].videoId, 'a');
     assert.ok(merged.every(v => v.videoId));
+});
+
+test('mergeChannelVideos keeps the unwatched videos of the last weeks beyond the cap, up to a limit', () => {
+    const now = Date.parse('2026-01-01T12:00:00Z');
+    const day = 24 * 3600 * 1000;
+    const older = Array.from({ length: 40 }, (_, i) => cached(`old${i}`, new Date(now - (i + 1) * day / 2).toISOString()));
+    const watched = new Set(['old12', 'old13']);
+
+    const merged = mergeChannelVideos([apiItem('a')], older, { isWatched: id => watched.has(id), now });
+    const ids = merged.map(v => v.videoId);
+    assert.deepEqual(ids.slice(0, MAX_VIDEOS_PER_CHANNEL), ['a', ...older.slice(0, MAX_VIDEOS_PER_CHANNEL - 1).map(v => v.videoId)]);
+    assert.ok(!ids.includes('old12') && !ids.includes('old13'), 'watched ones go');
+    assert.equal(ids.length, MAX_KEPT_PER_CHANNEL);
+
+    // Older than 30 days: not kept, even unwatched
+    const old = Array.from({ length: 15 }, (_, i) => cached(`old${i}`, new Date(now - (40 + i) * day).toISOString()));
+    assert.equal(mergeChannelVideos([], old, { isWatched: () => false, now }).length, MAX_VIDEOS_PER_CHANNEL);
+});
+
+test('videosToFetch asks for more videos when the channel was read long ago', () => {
+    const now = Date.UTC(2026, 9, 2);
+    assert.equal(videosToFetch(undefined, now), VIDEOS_PER_SYNC, 'never read: the usual number');
+    assert.equal(videosToFetch(now - 3600 * 1000, now), VIDEOS_PER_SYNC);
+    assert.equal(videosToFetch(now - 2 * 24 * 3600 * 1000, now), CATCH_UP_VIDEOS);
 });
 
 test('mergeChannelVideos works without cached videos', () => {
