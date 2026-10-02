@@ -315,6 +315,22 @@ test('the feed can be filtered on one channel from the groups page', async ({ pa
     await expect(page.locator('.filter-button.active')).toHaveText('Tous');
 });
 
+test('an open menu stays open when the page is rendered again, and closes once used', async ({ page }) => {
+    await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A', 'UC_B'] } }, '/#groupe/Tech');
+    const menu = await openRowMenu(page, 'Chaîne B');
+    await expect(menu).toBeVisible();
+
+    // The same view rendered again (as when the subscriptions arrive): new rows, same menu open
+    await page.evaluate(() => { document.querySelector('details.row-menu[open]').dataset.old = 'yes'; });
+    await page.evaluate(() => window.dispatchEvent(new HashChangeEvent('hashchange')));
+    await expect(page.locator('details[data-old]')).toHaveCount(0);
+    await expect(menu).toBeVisible();
+
+    await menu.locator('.menu-item', { hasText: 'Favoris' }).click();
+    await expect(rowOf(page, 'Chaîne B').locator('.mini-chip')).toHaveText(['Favoris']);
+    await expect(page.locator('details.row-menu[open]')).toHaveCount(0);
+});
+
 test('an unknown group in the URL goes back to the overview', async ({ page }) => {
     await openApp(page, signedIn(), '/#groupe/Inconnu');
     await expect(page.locator('#error-message')).toContainText('n\'existe pas');

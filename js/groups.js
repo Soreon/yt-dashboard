@@ -137,6 +137,7 @@ function matches(name) {
 // --- Overview ---
 
 function renderOverview() {
+    const openMenu = renderedKey === 'overview' ? openMenuOf($('groups-grid')) : undefined;
     renderedKey = 'overview';
     const groups = getUserGroups();
     const channelNames = getChannelNames();
@@ -206,12 +207,26 @@ function renderOverview() {
         wrap.append(card, createCardMenu(name, groups, hidden));
         grid.appendChild(wrap);
     });
+    reopenMenu(grid, openMenu);
+}
+
+// A re-render of the same view (subscriptions loaded, sync done) rebuilds its menus:
+// the one the user has open stays open. Menus are told apart by data-menu
+function openMenuOf(container) {
+    return container.querySelector('details.row-menu[open]')?.dataset.menu;
+}
+
+function reopenMenu(container, key) {
+    if (key === undefined) return;
+    const menu = Array.from(container.querySelectorAll('details.row-menu')).find(details => details.dataset.menu === key);
+    if (menu) menu.open = true;
 }
 
 // Card menu: move the group among the filters (the favorites stay first), hide it from the feed
 function createCardMenu(name, groups, hidden) {
     const details = document.createElement('details');
     details.className = 'row-menu card-menu';
+    details.dataset.menu = name;
 
     const summary = document.createElement('summary');
     summary.className = 'icon-button';
@@ -278,6 +293,8 @@ function renderChannelsView(target) {
 
     // Arriving on this view: closed forms (or the picker open, right after creating the group)
     const key = ungrouped ? 'ungrouped' : inactive ? 'inactive' : `group:${target}`;
+    const rows = $('group-channels');
+    const openMenu = key === renderedKey ? openMenuOf(rows) : undefined;
     if (key !== renderedKey) {
         renderedKey = key;
         showRenameForm(false);
@@ -299,7 +316,6 @@ function renderChannelsView(target) {
             inactiveCount > 0 ? `${inactiveCount} inactive${inactiveCount > 1 ? 's' : ''}` : null
         ].filter(Boolean).join(' · ');
 
-    const rows = $('group-channels');
     rows.innerHTML = '';
 
     if (channelIds.length === 0) {
@@ -325,6 +341,7 @@ function renderChannelsView(target) {
             activity: channelActivity(channelId, videoCache, history)
         }));
     });
+    reopenMenu(rows, openMenu);
 }
 
 // One channel: avatar, name, activity, its other groups, and a menu to add it to / remove it from groups
@@ -387,6 +404,7 @@ function createChannelRow(channelId, target, { groups, channelNames, channelAvat
 function createRowMenu(channelId, channelName, target, groups) {
     const details = document.createElement('details');
     details.className = 'row-menu';
+    details.dataset.menu = channelId;
 
     const summary = document.createElement('summary');
     summary.className = 'icon-button';
@@ -428,11 +446,16 @@ function createRowMenu(channelId, channelName, target, groups) {
     return details;
 }
 
+// Menu entry: closes its menu, then acts (so the re-render that follows does not reopen it)
 function menuItem(label, onClick) {
     const button = document.createElement('button');
     button.className = 'menu-item';
     button.textContent = label;
-    button.addEventListener('click', onClick);
+    button.addEventListener('click', () => {
+        const menu = button.closest('details');
+        if (menu) menu.open = false;
+        onClick();
+    });
     return button;
 }
 
