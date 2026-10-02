@@ -160,6 +160,15 @@ function upgradeVideoCache() {
     saveCacheVersion(CACHE_VERSION);
 }
 
+// The history alone used to hold the watched videos: add its videos to the full list, so that
+// removing them later is recorded for the other devices too
+function upgradeWatchedIds() {
+    const ids = getWatchedIds();
+    const known = new Set(ids);
+    const missing = Object.keys(getWatchHistory()).filter(id => !known.has(id));
+    if (missing.length > 0) saveWatchedIds([...ids, ...missing]);
+}
+
 // Forget channels the user is no longer subscribed to
 function pruneUnsubscribedChannels(channelIds) {
     savePlaylistCache(keepChannels(getPlaylistCache(), channelIds));
@@ -579,6 +588,7 @@ function showCachedFeed() {
 // Initialize application
 function initApp() {
     upgradeVideoCache();
+    upgradeWatchedIds();
     setupEventListeners();
 
     // Show the cached feed right away, unless the user signed out

@@ -95,6 +95,7 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/history-model.js](js/history-model.js) | Vidéos vues, regroupement par jour et import Google Takeout, sans DOM : testée unitairement |
 | [js/zip.js](js/zip.js) | Lecture d'une entrée d'archive zip avec la décompression native du navigateur : testée unitairement |
 | [js/groups-model.js](js/groups-model.js) | Création, renommage, ajout et retrait de chaînes, activité des groupes, export et import, sans DOM : testée unitairement |
+| [js/sync-model.js](js/sync-model.js) | Datation des changements et fusion des données de deux appareils (groupes, vidéos vues, historique), sans DOM : testée unitairement |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
 
@@ -138,6 +139,7 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_feed_layout` | Affichage du fil : grille ou liste |
 | `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus, pour la page Historique) |
 | `yt_watched_ids` | Identifiants de toutes les vidéos vues ou importées, sans limite, pour les masquer du fil |
+| `yt_sync_stamps` | Date du dernier changement de chaque élément synchronisable (vidéo vue ou retirée, groupe, chaîne d'un groupe, groupe masqué, ordre des groupes), pour fusionner les données de plusieurs appareils |
 | `yt_cache_version` | Version du format du cache (un cache plus ancien est reconstruit à la synchronisation suivante) |
 
 Pour repartir de zéro : `localStorage.clear()` dans la console du navigateur.

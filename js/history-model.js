@@ -36,6 +36,18 @@ export function unmarkWatched(history, videoId) {
     return Object.fromEntries(Object.entries(history).filter(([id]) => id !== videoId));
 }
 
+// History of two devices merged: each video once (its latest watch), only the videos for which
+// keep(videoId) is true, and the MAX_HISTORY most recent
+export function mergeHistory(first = {}, second = {}, keep = () => true) {
+    const merged = new Map();
+    [first, second].forEach(history => Object.entries(history).forEach(([videoId, entry]) => {
+        if (!keep(videoId)) return;
+        const existing = merged.get(videoId);
+        if (!existing || entry.watchedAt > existing.watchedAt) merged.set(videoId, entry);
+    }));
+    return trim(Object.fromEntries(merged));
+}
+
 // History entries, most recently watched first
 export function historyEntries(history) {
     return Object.values(history).sort((a, b) => b.watchedAt - a.watchedAt);

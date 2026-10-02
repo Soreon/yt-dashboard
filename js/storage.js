@@ -1,6 +1,7 @@
 // Persistence in localStorage
 
 import { withFavorites } from './groups-model.js';
+import { packStamps, stampChanges, unpackStamps } from './sync-model.js';
 
 const AUTH_KEY = 'yt_auth_token';
 const PLAYLISTS_KEY = 'yt_playlist_cache';
@@ -16,6 +17,7 @@ const WATCH_HISTORY_KEY = 'yt_watch_history';
 const HIDDEN_GROUPS_KEY = 'yt_hidden_groups';
 const WATCHED_IDS_KEY = 'yt_watched_ids';
 const FEED_LAYOUT_KEY = 'yt_feed_layout';
+const SYNC_STAMPS_KEY = 'yt_sync_stamps';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -37,6 +39,16 @@ function writeJSON(key, value) {
         console.error(`Error saving ${key}:`, error);
         return false;
     }
+}
+
+// Write a synced value, and stamp what changed from before to after (same fields), so that
+// another device can merge it (see sync-model.js)
+function writeSynced(key, value, before, after) {
+    const written = writeJSON(key, value);
+    if (written) {
+        writeJSON(SYNC_STAMPS_KEY, packStamps(stampChanges(getSyncStamps(), before, after, Date.now())));
+    }
+    return written;
 }
 
 function remove(key) {
@@ -102,7 +114,7 @@ export function getUserGroups() {
 }
 
 export function saveUserGroups(groups) {
-    return writeJSON(GROUPS_KEY, groups);
+    return writeSynced(GROUPS_KEY, groups, { groups: getUserGroups() }, { groups: withFavorites(groups) });
 }
 
 // { channelId: channel name }
@@ -161,7 +173,7 @@ export function getHiddenGroups() {
 }
 
 export function saveHiddenGroups(names) {
-    return writeJSON(HIDDEN_GROUPS_KEY, names);
+    return writeSynced(HIDDEN_GROUPS_KEY, names, { hiddenGroups: getHiddenGroups() }, { hiddenGroups: names });
 }
 
 // IDs of every video ever watched or imported, to hide them from the feed (the detailed
@@ -172,7 +184,7 @@ export function getWatchedIds() {
 }
 
 export function saveWatchedIds(ids) {
-    return writeJSON(WATCHED_IDS_KEY, ids);
+    return writeSynced(WATCHED_IDS_KEY, ids, { watchedIds: getWatchedIds() }, { watchedIds: ids });
 }
 
 // Watched videos: { videoId: { watchedAt, video } }
@@ -191,4 +203,9 @@ export function getCacheVersion() {
 
 export function saveCacheVersion(version) {
     return writeJSON(CACHE_VERSION_KEY, version);
+}
+
+// Time of the last change of every synced element (see sync-model.js)
+export function getSyncStamps() {
+    return unpackStamps(readJSON(SYNC_STAMPS_KEY, null));
 }
