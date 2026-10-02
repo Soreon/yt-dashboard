@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { MAX_VIDEOS_PER_CHANNEL } from '../js/config.js';
 import {
     applyVideoDetails, buildFeed, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
-    longFormPlaylistId, matchesSearch, mergeChannelVideos, normalizeText, parseIsoDuration, toCachedVideo,
-    videosMissingDetails
+    longFormPlaylistId, matchesSearch, mergeChannelVideos, nextQuotaReset, normalizeText, parseIsoDuration,
+    quotaResetText, toCachedVideo, videosMissingDetails
 } from '../js/feed.js';
 
 // playlistItems API item, as returned by the YouTube Data API
@@ -197,4 +197,17 @@ test('matchesSearch needs every word in the title or channel name', () => {
     assert.equal(matchesSearch(video, 'echecs'), true);
     assert.equal(matchesSearch(video, 'ÉCHECS chaine'), true);
     assert.equal(matchesSearch(video, 'echecs cuisine'), false);
+});
+
+test('nextQuotaReset is the next midnight, Pacific time, summer and winter', () => {
+    assert.equal(nextQuotaReset(Date.UTC(2026, 9, 2, 12, 0)), Date.UTC(2026, 9, 3, 7, 0)); // 05:00 PDT
+    assert.equal(nextQuotaReset(Date.UTC(2026, 9, 3, 6, 59, 30)), Date.UTC(2026, 9, 3, 7, 0)); // 23:59 PDT
+    assert.equal(nextQuotaReset(Date.UTC(2026, 9, 3, 7, 0)), Date.UTC(2026, 9, 4, 7, 0)); // Midnight: the next one
+    assert.equal(nextQuotaReset(Date.UTC(2026, 0, 15, 12, 0)), Date.UTC(2026, 0, 16, 8, 0)); // 04:00 PST
+});
+
+test('quotaResetText gives the time, and says tomorrow when it is', () => {
+    const reset = new Date(2026, 9, 3, 9, 0).getTime();
+    assert.equal(quotaResetText(reset, new Date(2026, 9, 3, 2, 0).getTime()), 'à partir de 09:00');
+    assert.equal(quotaResetText(reset, new Date(2026, 9, 2, 22, 0).getTime()), 'demain à partir de 09:00');
 });

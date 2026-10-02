@@ -145,6 +145,7 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_hidden_groups` | Noms des groupes masqués dans les filtres du fil |
 | `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
 | `yt_guide_collapsed` | Menu latéral réduit ou non |
+| `yt_quota_reset_at` | Heure à laquelle le quota YouTube du jour revient, quand il est épuisé |
 | `yt_drive_sync` | Synchronisation Google Drive sur cet appareil : activée ou non, fichier et version du dernier échange |
 | `yt_feed_layout` | Affichage du fil : grille ou liste |
 | `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus, pour la page Historique) |
@@ -165,6 +166,8 @@ Le quota par défaut est de 10 000 unités par jour et par projet Google Cloud. 
 | **Synchronisation** | **1 unité par chaîne**, plus 1 unité par lot de 50 vidéos récupérées (durées et vues) |
 
 Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une toutes les 30 minutes, et seulement pendant la session Google (environ 1 h) ; l'icône de synchronisation ignore cette limite.
+
+Le quota est celui du projet : tous vos appareils se le partagent. Quand il est épuisé, l'application garde les vidéos déjà reçues, indique l'heure à laquelle il revient (minuit, heure du Pacifique, soit 9 h en France) et n'envoie plus aucune requête à YouTube d'ici là ; le fil en cache reste affiché.
 
 La synchronisation Google Drive a son propre quota, gratuit et très large (325 000 unités par minute et par utilisateur) : chaque échange coûte 5 unités pour vérifier si un autre appareil a écrit, plus 200 pour lire le fichier s'il a changé et 50 pour l'envoyer s'il y a du nouveau.
 

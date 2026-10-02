@@ -63,6 +63,29 @@ test('a 401 during a sync keeps the feed and offers to reconnect', async ({ page
     await expect(feedCards(page)).toHaveCount(15);
 });
 
+test('a used up quota keeps what came, says when the videos come back, and waits until then', async ({ page, youtube }) => {
+    await openApp(page, signedIn());
+    await expect(feedCards(page)).toHaveCount(15);
+    await waitForSync(page);
+
+    // The three channels answer, then the quota runs out before the durations
+    youtube.publishVideo('fresh_video');
+    youtube.quotaLeft = 3;
+    await page.locator('#force-sync-button').click();
+    await expect(page.locator('#error-message')).toHaveText(/^Quota YouTube du jour épuisé : les vidéos se remettront à jour (demain )?à partir de \d\d:\d\d\.$/);
+    await expect(feedTitles(page).first()).toHaveText('Nouvelle vidéo fresh_video');
+    expect(await readStorage(page, 'yt_quota_reset_at')).toBeGreaterThan(Date.now());
+
+    // No request until it is renewed: neither the sync button nor a reload
+    const calls = youtube.calls.length;
+    await page.locator('#force-sync-button').click();
+    await expect(page.locator('#error-message')).toContainText('Quota YouTube du jour épuisé');
+    await page.reload();
+    await expect(feedCards(page)).toHaveCount(16);
+    await expect(page.locator('#error-message')).toContainText('Quota YouTube du jour épuisé');
+    expect(youtube.calls.length).toBe(calls);
+});
+
 test('Shorts are left out, with a fallback when a long-form playlist is missing', async ({ page, youtube }) => {
     youtube.noLongForm.add('UC_C');
     await openApp(page, signedIn());

@@ -42,6 +42,7 @@ export class FakeYouTube {
         this.subscriptions = ['UC_A', 'UC_B', 'UC_C'];
         this.noLongForm = new Set(); // Channels whose long-form playlist (UULF…) answers 404
         this.failures = {}; // { endpoint: HTTP status } to make an endpoint fail
+        this.quotaLeft = Infinity; // API calls answered before the daily quota is used up
         this.newVideos = []; // Videos published on UC_A during the test: { videoId, publishedAt }
         this.inactive = new Set(); // Channels whose videos are all more than a year old
         this.calls = []; // Every API call: { endpoint, params, auth }
@@ -143,6 +144,10 @@ export class FakeYouTube {
         if (status) {
             return route.fulfill({ status, json: { error: { code: status } } });
         }
+        if (this.quotaLeft <= 0) {
+            return route.fulfill({ status: 403, json: { error: { code: 403, errors: [{ domain: 'youtube.quota', reason: 'quotaExceeded' }] } } });
+        }
+        this.quotaLeft--;
 
         switch (endpoint) {
             case 'subscriptions': return route.fulfill({ json: this.subscriptionsResponse() });

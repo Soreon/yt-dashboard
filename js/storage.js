@@ -19,6 +19,7 @@ const WATCHED_IDS_KEY = 'yt_watched_ids';
 const FEED_LAYOUT_KEY = 'yt_feed_layout';
 const SYNC_STAMPS_KEY = 'yt_sync_stamps';
 const DRIVE_SYNC_KEY = 'yt_drive_sync';
+const QUOTA_RESET_KEY = 'yt_quota_reset_at';
 
 let onSyncedChange = () => {};
 
@@ -101,6 +102,15 @@ export function getVideoCache() {
 
 export function saveVideoCache(cache) {
     return writeJSON(VIDEOS_KEY, cache);
+}
+
+// Until when the daily YouTube quota is used up (timestamp, 0 if it is not)
+export function getQuotaResetAt() {
+    return Number(readJSON(QUOTA_RESET_KEY, 0)) || 0;
+}
+
+export function saveQuotaResetAt(timestamp) {
+    return writeJSON(QUOTA_RESET_KEY, timestamp);
 }
 
 // Timestamp (ms) of the last successful sync

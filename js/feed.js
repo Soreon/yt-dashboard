@@ -134,6 +134,26 @@ export function matchesSearch(video, query) {
     return normalizeText(query).split(/\s+/).filter(Boolean).every(word => haystack.includes(word));
 }
 
+// Next renewal of the daily YouTube quota: midnight, Pacific time (timestamp)
+export function nextQuotaReset(now = Date.now()) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles', hourCycle: 'h23',
+        year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric'
+    }).formatToParts(now).map(({ type, value }) => [type, Number(value)]));
+
+    // Pacific wall-clock time read as UTC, minus the real time: the offset of Pacific time
+    const offset = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+        - Math.floor(now / 1000) * 1000;
+    return Date.UTC(parts.year, parts.month - 1, parts.day + 1) - offset;
+}
+
+// When the quota comes back, worded for the user: "à partir de 09:00", "demain à partir de 09:00"
+export function quotaResetText(reset, now = Date.now()) {
+    const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(reset);
+    const sameDay = new Date(reset).toDateString() === new Date(now).toDateString();
+    return `${sameDay ? '' : 'demain '}à partir de ${time}`;
+}
+
 // Relative publication time, worded like YouTube: "il y a 3 heures", "il y a 2 semaines"
 export function getRelativeTime(dateString, now = Date.now()) {
     if (!dateString) return 'Date inconnue';

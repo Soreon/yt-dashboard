@@ -8,6 +8,9 @@ const API_BASE = 'https://www.googleapis.com/youtube/v3';
 // Raised when the access token is rejected (expired or revoked)
 export class AuthError extends Error {}
 
+// Raised when the daily quota of the Google Cloud project is used up (renewed at midnight, Pacific time)
+export class QuotaError extends Error {}
+
 // Raised on any other HTTP error
 class ApiError extends Error {
     constructor(response) {
@@ -29,6 +32,14 @@ async function apiFetch(endpoint, params, token) {
 
     if (response.status === 401) {
         throw new AuthError('Session expirée');
+    }
+
+    if (response.status === 403) {
+        const body = await response.json().catch(() => ({}));
+        const reason = body.error?.errors?.[0]?.reason;
+        if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') {
+            throw new QuotaError('Quota YouTube épuisé');
+        }
     }
 
     if (!response.ok) {
@@ -64,7 +75,7 @@ export async function fetchMyChannel(token) {
         const snippet = data.items?.[0]?.snippet;
         return snippet ? { name: snippet.title, avatar: snippet.thumbnails?.default?.url || '' } : null;
     } catch (error) {
-        if (error instanceof AuthError) throw error;
+        if (error instanceof AuthError || error instanceof QuotaError) throw error;
         console.error('Error fetching account:', error);
         return null;
     }
@@ -85,7 +96,7 @@ export async function fetchUploadsPlaylists(channelIds, token) {
                 }
             });
         } catch (error) {
-            if (error instanceof AuthError) throw error;
+            if (error instanceof AuthError || error instanceof QuotaError) throw error;
             console.error('Error fetching batch:', error);
         }
     }
@@ -112,7 +123,7 @@ export async function fetchVideoDetails(videoIds, token) {
                 };
             });
         } catch (error) {
-            if (error instanceof AuthError) throw error;
+            if (error instanceof AuthError || error instanceof QuotaError) throw error;
             console.error('Error fetching video details:', error);
         }
     }));
@@ -138,7 +149,7 @@ export async function fetchLatestVideos(uploadsPlaylistId, token) {
             return await fetchPlaylistItems(uploadsPlaylistId, token);
         }
     } catch (error) {
-        if (error instanceof AuthError) throw error;
+        if (error instanceof AuthError || error instanceof QuotaError) throw error;
         console.error(`Error fetching playlist ${uploadsPlaylistId}:`, error);
         return null;
     }

@@ -2,13 +2,14 @@
 
 import { AUTO_SYNC_CHECK_MS, CLIENT_ID, DRIVE_SCOPE, DRIVE_SYNC_DELAY_MS, SCOPES, SYNC_INTERVAL_MS } from './config.js';
 import {
-    AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchMyChannel, fetchUploadsPlaylists, fetchVideoDetails
+    AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchMyChannel, fetchUploadsPlaylists, fetchVideoDetails,
+    QuotaError
 } from './api.js';
 import { DriveAccessError } from './drive.js';
 import { syncWithDrive } from './drive-sync.js';
 import {
-    applyVideoDetails, buildFeed, getRelativeTime, keepChannels, matchesSearch, mergeChannelVideos,
-    videosMissingDetails
+    applyVideoDetails, buildFeed, getRelativeTime, keepChannels, matchesSearch, mergeChannelVideos, nextQuotaReset,
+    quotaResetText, videosMissingDetails
 } from './feed.js';
 import { groupsRouteFromHash, renderGroupsPage, setupGroupsPage } from './groups.js';
 import {
@@ -18,10 +19,11 @@ import { readZipText } from './zip.js';
 import {
     clearAccount, clearAuthData, clearDriveSyncState, getAccount, getAuthData, getCacheVersion, getChannelAvatars,
     getChannelNames, getDriveSyncState, getFeedLayout, getGuideCollapsed, getHiddenGroups, getLastSync,
-    getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory, getWatchedIds, hasStoredSession,
+    getPlaylistCache, getQuotaResetAt, getUserGroups, getVideoCache, getWatchHistory, getWatchedIds,
+    hasStoredSession,
     saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveDriveSyncState,
-    saveFeedLayout, saveGuideCollapsed, saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory,
-    saveWatchedIds, setSyncedChangeListener
+    saveFeedLayout, saveGuideCollapsed, saveLastSync, savePlaylistCache, saveQuotaResetAt, saveVideoCache,
+    saveWatchHistory, saveWatchedIds, setSyncedChangeListener
 } from './storage.js';
 import {
     clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderDriveSync, renderFilterButtons, renderHistory,
@@ -193,6 +195,20 @@ function handleSessionExpired() {
     showError('Session expirée. Reconnectez-vous pour mettre à jour le flux.');
 }
 
+// The daily YouTube quota is used up: no request until it is renewed
+function quotaUsedUp() {
+    return Date.now() < getQuotaResetAt();
+}
+
+function showQuotaUsedUp() {
+    showError(`Quota YouTube du jour épuisé : les vidéos se remettront à jour ${quotaResetText(getQuotaResetAt())}.`);
+}
+
+function handleQuotaUsedUp() {
+    saveQuotaResetAt(nextQuotaReset());
+    showQuotaUsedUp();
+}
+
 // Save the video cache, warning the user if the browser storage is full
 function storeVideoCache(cache) {
     if (!saveVideoCache(cache)) {
@@ -245,6 +261,11 @@ async function syncAllChannels(force = false, { background = false } = {}) {
         return;
     }
 
+    if (quotaUsedUp()) {
+        if (force) showQuotaUsedUp();
+        return;
+    }
+
     // Check if sync is needed
     const now = Date.now();
 
@@ -266,14 +287,25 @@ async function syncAllChannels(force = false, { background = false } = {}) {
     isSyncing = true;
 
     try {
-        // Fetch videos from all playlists in parallel
+        // Fetch videos from all playlists in parallel. Once the quota is used up, the requests
+        // still answered are kept
+        let quotaHit = false;
+        const unlessQuota = fallback => error => {
+            if (!(error instanceof QuotaError)) throw error;
+            quotaHit = true;
+            return fallback;
+        };
         const results = await Promise.all(
-            channels.map(([, playlistId]) => fetchLatestVideos(playlistId, accessToken))
+            channels.map(([, playlistId]) => fetchLatestVideos(playlistId, accessToken).catch(unlessQuota(null)))
         );
 
         // Every request failed: keep the previous timestamp so the next load retries
         if (results.every(videos => videos === null)) {
-            showError('Erreur lors de la synchronisation des vidéos');
+            if (quotaHit) {
+                handleQuotaUsedUp();
+            } else {
+                showError('Erreur lors de la synchronisation des vidéos');
+            }
             return;
         }
 
@@ -291,7 +323,7 @@ async function syncAllChannels(force = false, { background = false } = {}) {
         // moving) and fill in any cached video that has none yet
         const fetchedIds = results.filter(Boolean).flat().map(item => item.snippet?.resourceId?.videoId);
         const detailIds = [...new Set([...fetchedIds, ...videosMissingDetails(videoCache)])].filter(Boolean);
-        const details = await fetchVideoDetails(detailIds, accessToken);
+        const details = await fetchVideoDetails(detailIds, accessToken).catch(unlessQuota({}));
 
         // Save updated cache and timestamp
         const updatedCache = applyVideoDetails(videoCache, details);
@@ -307,10 +339,13 @@ async function syncAllChannels(force = false, { background = false } = {}) {
             renderView();
         }
         refreshFilterButtons();
+        if (quotaHit) handleQuotaUsedUp();
 
     } catch (error) {
         if (error instanceof AuthError) {
             handleSessionExpired();
+        } else if (error instanceof QuotaError) {
+            handleQuotaUsedUp();
         } else {
             console.error('Error during sync:', error);
             showError('Erreur lors de la synchronisation des vidéos');
@@ -332,6 +367,13 @@ async function loadSubscriptions() {
         // First, load videos from cache immediately, and get the changes made on other devices
         renderVideoFeed();
         runDriveSync();
+
+        // No YouTube request until the quota is renewed: the cached feed only
+        if (quotaUsedUp()) {
+            refreshFilterButtons();
+            showQuotaUsedUp();
+            return;
+        }
 
         // Fetch all subscriptions, and the user's name and avatar for the masthead
         const [subscriptions, account] = await Promise.all([
@@ -371,6 +413,9 @@ async function loadSubscriptions() {
     } catch (error) {
         if (error instanceof AuthError) {
             handleSessionExpired();
+        } else if (error instanceof QuotaError) {
+            refreshFilterButtons();
+            handleQuotaUsedUp();
         } else {
             showError(`Erreur lors de la récupération des abonnements: ${error.message}`);
         }
