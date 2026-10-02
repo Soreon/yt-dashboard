@@ -30,6 +30,29 @@ test('the search box filters the feed, ignoring accents and case', async ({ page
     await expect(page.locator('.no-videos')).toHaveText('Aucune vidéo ne correspond à « zzz ».');
 });
 
+test('the app can be installed, and opens offline with the files of its last visit', async ({ page, context }) => {
+    await openApp(page, expiredSessionWithCache());
+    await expect(feedCards(page)).toHaveCount(3);
+
+    await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', 'manifest.webmanifest');
+    const manifest = await page.evaluate(async () => (await fetch('manifest.webmanifest')).json());
+    expect(manifest).toMatchObject({ name: 'Global Video Feed', start_url: './', display: 'standalone' });
+    for (const icon of manifest.icons) {
+        expect(await page.evaluate(async src => (await fetch(src)).headers.get('content-type'), icon.src)).toBe('image/png');
+    }
+
+    // Once the service worker controls the page, a visit keeps a copy of the app
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await expect(feedCards(page)).toHaveCount(3);
+
+    await context.setOffline(true);
+    await page.reload();
+    await expect(feedCards(page)).toHaveCount(3);
+    await context.setOffline(false);
+});
+
 test('"Tout marquer comme vu" empties a filtered feed, with "Annuler", and leaves the history alone', async ({ page }) => {
     await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A'] } });
     await expect(feedCards(page)).toHaveCount(15);

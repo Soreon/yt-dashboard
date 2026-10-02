@@ -12,7 +12,9 @@ const CONTENT_TYPES = {
     '.js': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.svg': 'image/svg+xml',
-    '.json': 'application/json'
+    '.png': 'image/png',
+    '.json': 'application/json',
+    '.webmanifest': 'application/manifest+json'
 };
 
 createServer(async (request, response) => {

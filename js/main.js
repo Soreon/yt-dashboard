@@ -830,6 +830,11 @@ function initApp() {
 
     startAutoSync();
     waitForGoogleAuth();
+
+    // Installable app, which opens offline too (see sw.js)
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(error => console.error('Service worker not registered:', error));
+    }
 }
 
 // Wait for Google Identity Services to load, then restore the session

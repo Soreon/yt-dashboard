@@ -12,6 +12,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 - **Historique** des vidéos vues, regroupées par jour, avec recherche, et import de votre historique YouTube (Google Takeout).
 - **Recherche** dans le fil, par titre ou nom de chaîne.
 - **Interface inspirée de YouTube** : mêmes codes de mise en page (cartes avec durée, vues et avatar de la chaîne, filtres en pastilles, menu latéral), thème clair ou sombre selon le système, adaptée au mobile.
+- **Application installable** : sur l'écran d'accueil du téléphone ou comme application de bureau, en plein écran, et elle s'ouvre même hors connexion avec le fil en cache.
 - **Cache local** : le fil s'affiche instantanément depuis le cache, y compris quand la session a expiré.
 - **Synchronisation entre appareils** (facultative) : les groupes et les vidéos vues se retrouvent sur tous vos appareils, via un dossier caché de votre Google Drive.
 
@@ -70,6 +71,7 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 - **Tout marquer comme vu** (✓✓ à droite des filtres, quand le fil est filtré sur un groupe ou une chaîne) : toutes les vidéos de ce fil, recherche comprise, en sortent d'un coup, avec « Annuler ». Elles comptent comme vues (et se synchronisent comme telles) mais ne rejoignent pas l'historique, qui garde les vidéos réellement ouvertes.
 - **Synchronisation automatique** : toutes les 5 minutes et à chaque retour sur l'onglet, l'application synchronise si la dernière synchronisation date de plus de 30 minutes. Chaque chaîne est relue selon son rythme, d'après la date de sa dernière vidéo connue : à chaque synchronisation si elle a publié depuis moins de 2 semaines, toutes les 6 heures depuis moins de 2 mois, une fois par jour depuis moins d'un an, une fois par semaine au-delà. Une chaîne endormie qui republie apparaît donc avec un peu de retard, au plus une semaine. Si de nouvelles vidéos arrivent alors que vous êtes descendu dans le fil, une pastille « Nouvelles vidéos » les affiche au lieu de déplacer la page.
 - **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché et la synchronisation automatique s'arrête. Cliquez sur « Se connecter » pour reprendre.
+- **Installer l'application** : sur Android (Chrome), menu ⋮ > « Installer l'application » ou « Ajouter à l'écran d'accueil » ; sur iPhone (Safari), Partager > « Sur l'écran d'accueil » ; sur ordinateur (Chrome, Edge), l'icône d'installation de la barre d'adresse. Hors connexion, elle s'ouvre avec les fichiers de la dernière visite et le fil en cache ; en ligne, elle utilise toujours la dernière version publiée.
 - **Se déconnecter** (menu de votre avatar) : révoque le jeton et vide l'écran. Les caches et les groupes restent dans le navigateur. La synchronisation Google Drive est désactivée : le compte suivant n'est peut-être pas le même.
 - **Synchroniser avec Google Drive** (interrupteur du menu de votre avatar) : la première activation demande à Google l'accès à un dossier caché de votre Drive, réservé à l'application (`drive.appdata`) ; elle ne voit rien d'autre de votre Drive. Si vous refusez cet accès (Google permet de décocher chaque autorisation), l'application fonctionne comme avant, sans synchronisation. Une fois activée sur chaque appareil, les **groupes** (avec leur ordre, Favoris compris), les **groupes masqués** et les **vidéos vues** (historique et import Takeout compris) se rejoignent : à la connexion, à chaque retour sur l'onglet, quelques secondes après chaque modification, en quittant l'onglet, et avec l'icône ⟳. Les modifications faites des deux côtés entre deux synchronisations sont fusionnées : chaque groupe, chaîne ou vidéo suit l'appareil qui l'a modifié en dernier, et la première synchronisation additionne tout, sans rien supprimer. Restent propres à chaque appareil : l'affichage en grille ou en liste, le menu réduit, et les caches (reconstruits depuis YouTube). Comme le reste, la synchronisation ne fonctionne que pendant la session Google : les modifications faites ensuite partent à la connexion suivante. Pour effacer les données synchronisées : dans Google Drive, **Paramètres > Gérer les applications**, puis sur l'application (sous le nom de son écran de consentement OAuth) **Options > Supprimer les données d'application masquées**.
 
@@ -106,6 +108,8 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/ui.js](js/ui.js) | Affichage du fil, des filtres, du compte et des messages |
 | [js/groups.js](js/groups.js) | Page Groupes : vue d'ensemble, détail d'un groupe, chaînes sans groupe |
 | [js/history-model.js](js/history-model.js) | Vidéos vues, regroupement par jour et import Google Takeout, sans DOM : testée unitairement |
+| [sw.js](sw.js) | *Service worker* : garde une copie des fichiers de l'application pour l'ouvrir hors connexion (le réseau d'abord, la copie si on est hors ligne) |
+| [manifest.webmanifest](manifest.webmanifest), [icons/](icons/) | Nom, icônes et affichage de l'application installée |
 | [js/zip.js](js/zip.js) | Lecture d'une entrée d'archive zip avec la décompression native du navigateur : testée unitairement |
 | [js/groups-model.js](js/groups-model.js) | Création, renommage, ajout et retrait de chaînes, activité des groupes, export et import, sans DOM : testée unitairement |
 | [js/drive.js](js/drive.js) | Appels à l'API Google Drive v3 : le fichier de synchronisation du dossier caché de l'application |
@@ -133,7 +137,7 @@ En local, les tests utilisent le Google Chrome installé (pas de téléchargemen
 
 ### Intégration continue et déploiement
 
-Le workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) lance les tests unitaires et les tests de bout en bout à chaque push et à chaque pull request. Sur `main`, le site n'est déployé sur GitHub Pages que si tous les tests passent ; seuls les fichiers du site sont publiés (`index.html`, `styles.css`, `favicon.svg`, `js/`). Un nouveau fichier nécessaire au site doit être ajouté à la liste de l'étape « Collect the site files ».
+Le workflow [.github/workflows/ci.yml](.github/workflows/ci.yml) lance les tests unitaires et les tests de bout en bout à chaque push et à chaque pull request. Sur `main`, le site n'est déployé sur GitHub Pages que si tous les tests passent ; seuls les fichiers du site sont publiés (`index.html`, `styles.css`, `favicon.svg`, `manifest.webmanifest`, `sw.js`, `icons/`, `js/`). Un nouveau fichier nécessaire au site doit être ajouté à la liste de l'étape « Collect the site files ».
 
 Cela suppose que GitHub Pages soit configuré pour être déployé par le workflow : **Settings → Pages → Build and deployment → Source : GitHub Actions**.
 
