@@ -221,12 +221,22 @@ function onVideoLinkOpened(card, video, onOpen) {
     });
 }
 
-// Render the video grid, or a message when there is nothing to show.
+// Cards added at a time (fills rows of 2, 3, 4 or 6): the next ones come while scrolling down
+const FEED_PAGE_SIZE = 48;
+let feedObserver = null;
+let feedShown = 0; // Cards the last render showed
+
+// Render the video grid, or a message when there is nothing to show. A long feed is rendered a
+// page at a time, the next page when the end comes near (marker at the end of the grid).
 // handlers: { onOpen(video, card), onToggleWatched(video, card) }
 export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}, handlers = {}) {
     const grid = document.getElementById('subscriptions-grid');
     if (!grid) return;
 
+    // Before emptying the grid, which brings the page back up
+    const scrolledDown = window.scrollY > 0;
+    feedObserver?.disconnect();
+    feedObserver = null;
     grid.innerHTML = '';
 
     if (videos.length === 0) {
@@ -234,7 +244,7 @@ export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}, handl
         return;
     }
 
-    videos.forEach(video => {
+    const createCard = video => {
         const card = createVideoCard(video, channelAvatars[video.channelId]);
 
         const action = document.createElement('button');
@@ -244,8 +254,45 @@ export function renderVideoGrid(videos, emptyMessage, channelAvatars = {}, handl
         markCardWatched(card, false);
 
         if (handlers.onOpen) onVideoLinkOpened(card, video, handlers.onOpen);
-        grid.appendChild(card);
-    });
+        return card;
+    };
+
+    const marker = document.createElement('div');
+    marker.className = 'feed-more';
+    grid.appendChild(marker);
+
+    let shown = 0;
+    const showMore = (count = FEED_PAGE_SIZE) => {
+        const page = document.createDocumentFragment();
+        videos.slice(shown, shown + count).forEach(video => page.appendChild(createCard(video)));
+        marker.before(page);
+        shown += count;
+        feedShown = Math.min(shown, videos.length);
+    };
+
+    // Rendered again below the top (a video marked as watched, a sync): as many cards as before,
+    // so that the page does not shrink and jump up
+    showMore(scrolledDown ? Math.max(FEED_PAGE_SIZE, feedShown) : FEED_PAGE_SIZE);
+    if (shown >= videos.length || typeof IntersectionObserver === 'undefined') {
+        while (shown < videos.length) showMore();
+        marker.remove();
+        return;
+    }
+
+    feedObserver = new IntersectionObserver(entries => {
+        if (!entries.some(entry => entry.isIntersecting)) return;
+        showMore();
+        if (shown >= videos.length) {
+            feedObserver.disconnect();
+            feedObserver = null;
+            marker.remove();
+            return;
+        }
+        // Observing again reports at once whether the marker is still near (very tall screen)
+        feedObserver.unobserve(marker);
+        feedObserver.observe(marker);
+    }, { rootMargin: '0px 0px 1500px 0px' });
+    feedObserver.observe(marker);
 }
 
 // Render the history page: day headings, then one row per video.

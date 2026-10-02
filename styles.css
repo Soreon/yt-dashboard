@@ -632,6 +632,12 @@ body.guide-collapsed .page {
     min-width: 0;
 }
 
+/* End of the cards rendered so far: when it comes near, the next ones are added */
+.feed-more {
+    grid-column: 1 / -1;
+    height: 1px;
+}
+
 .thumbnail {
     position: relative;
     display: block;

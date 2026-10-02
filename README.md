@@ -88,6 +88,7 @@ Connexion (jeton OAuth)
 - **Rien n'échappe au fil** : après une absence, une chaîne est relue plus loin en arrière (20 vidéos au lieu de 5, pour le même coût), et une vidéo non vue de moins de 30 jours reste dans le cache même si la chaîne a publié davantage depuis. Seules les données utiles de chaque vidéo sont téléchargées (paramètre `fields` de l'API) : pas les descriptions.
 
 - **Shorts** : les vidéos sont lues dans la playlist « vidéos longues » de chaque chaîne (`UULF…`, déduite de la playlist des mises en ligne `UU…`), qui exclut les Shorts. Cette playlist n'est pas documentée par l'API : si elle renvoie une erreur 404 pour une chaîne, l'application se rabat sur toutes ses mises en ligne, Shorts compris.
+- Le fil est affiché par paquets de 48 cartes, le suivant à l'approche du bas de la page : avec des centaines d'abonnements, il compte des milliers de vidéos.
 - Les chaînes dont vous vous êtes désabonné sont retirées des caches à chaque chargement des abonnements.
 - Une synchronisation n'est marquée comme faite que si au moins une chaîne a été récupérée : en cas d'échec, la suivante a lieu au prochain chargement.
 ### Organisation du code

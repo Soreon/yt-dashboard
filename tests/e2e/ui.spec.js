@@ -30,6 +30,34 @@ test('the search box filters the feed, ignoring accents and case', async ({ page
     await expect(page.locator('.no-videos')).toHaveText('Aucune vidéo ne correspond à « zzz ».');
 });
 
+test('a long feed is shown a page at a time, the rest while scrolling down', async ({ page }) => {
+    const storage = expiredSessionWithCache();
+    storage.yt_video_cache = { UC_A: Array.from({ length: 120 }, (_, i) => cachedVideo('UC_A', i, i + 1)) };
+    await openApp(page, storage);
+    await expect(feedCards(page)).toHaveCount(48);
+    await expect(page.locator('#video-count')).toHaveText('120');
+
+    await feedCards(page).last().scrollIntoViewIfNeeded();
+    await expect(feedCards(page)).toHaveCount(96);
+
+    // Marking a video as watched down there renders the feed again without moving the page
+    await feedCards(page).nth(60).hover();
+    const scrolled = await page.evaluate(() => window.scrollY);
+    await feedCards(page).nth(60).getByRole('button', { name: 'Marquer comme vue' }).click();
+    await expect(page.locator('#video-count')).toHaveText('119');
+    await expect(feedCards(page)).toHaveCount(96);
+    expect(Math.abs(await page.evaluate(() => window.scrollY) - scrolled)).toBeLessThan(400);
+
+    await feedCards(page).last().scrollIntoViewIfNeeded();
+    await expect(feedCards(page)).toHaveCount(119);
+    await expect(page.locator('.feed-more')).toHaveCount(0);
+
+    // A search, back at the top, starts again from the first page
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('#search-input').fill('UC_A');
+    await expect(feedCards(page)).toHaveCount(48);
+});
+
 test('the feed switches to a compact list, and the choice is remembered', async ({ page }) => {
     await openApp(page, signedIn());
     await expect(feedCards(page)).toHaveCount(15);
