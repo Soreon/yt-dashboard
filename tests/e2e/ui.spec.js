@@ -30,6 +30,26 @@ test('the search box filters the feed, ignoring accents and case', async ({ page
     await expect(page.locator('.no-videos')).toHaveText('Aucune vidéo ne correspond à « zzz ».');
 });
 
+test('"Tout marquer comme vu" empties a filtered feed, with "Annuler", and leaves the history alone', async ({ page }) => {
+    await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A'] } });
+    await expect(feedCards(page)).toHaveCount(15);
+    await expect(page.locator('#mark-all-watched')).toBeHidden(); // Not on "Tous"
+
+    await page.locator('.filter-button', { hasText: 'Tech' }).click();
+    await expect(feedCards(page)).toHaveCount(5);
+    await expect(page.locator('#mark-all-watched')).toHaveAttribute('title', 'Marquer les 5 vidéos comme vues');
+    await page.locator('#mark-all-watched').click();
+    await expect(page.locator('#error-message')).toContainText('5 vidéos marquées comme vues');
+    await expect(page.locator('.no-videos')).toHaveText('Vous êtes à jour : toutes les vidéos de ce fil ont été vues.');
+    await expect(page.locator('#mark-all-watched')).toBeHidden();
+    expect(await readStorage(page, 'yt_watched_ids')).toHaveLength(5);
+    expect(await readStorage(page, 'yt_watch_history')).toBeNull();
+
+    await page.locator('#error-message .toast-action').click();
+    await expect(feedCards(page)).toHaveCount(5);
+    expect(await readStorage(page, 'yt_watched_ids')).toEqual([]);
+});
+
 test('a long feed is shown a page at a time, the rest while scrolling down', async ({ page }) => {
     const storage = expiredSessionWithCache();
     storage.yt_video_cache = { UC_A: Array.from({ length: 120 }, (_, i) => cachedVideo('UC_A', i, i + 1)) };

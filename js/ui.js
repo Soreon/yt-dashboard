@@ -330,6 +330,18 @@ export function renderHistory(dayGroups, emptyMessage, channelAvatars = {}, hand
     });
 }
 
+// "Tout marquer comme vu" button of the filters bar, for the count videos of a filtered feed
+// (0: hidden)
+export function showMarkAllWatched(count) {
+    const button = document.getElementById('mark-all-watched');
+    if (!button) return;
+
+    button.hidden = count === 0;
+    const label = count === 1 ? 'Marquer la vidéo comme vue' : `Marquer les ${count} vidéos comme vues`;
+    button.title = label;
+    button.setAttribute('aria-label', label);
+}
+
 // Lay out the feed as a grid of cards or a compact list ('grid' or 'list'), and check the
 // matching side of the toggle. The cards are the same, only the CSS changes
 export function setFeedLayout(layout) {

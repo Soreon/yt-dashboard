@@ -30,7 +30,7 @@ import {
 import {
     clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderDriveSync, renderFilterButtons, renderHistory,
     renderStats, renderVideoGrid, setActiveView, setFeedLayout, setLoading, setSyncing, setupAccountMenu, showError,
-    showNewVideosPill, showToast, updateAuthUI
+    showMarkAllWatched, showNewVideosPill, showToast, updateAuthUI
 } from './ui.js';
 
 const SECONDS_TO_MILLISECONDS = 1000;
@@ -46,6 +46,7 @@ let activeChannel = null; // Channel the feed is filtered on, from the groups pa
 let searchQuery = ''; // Text typed in the search box
 let currentView = 'feed'; // 'feed', 'groups' or 'history'
 let watchedSinceRender = false; // Videos opened since the last render, hidden when coming back
+let feedVideos = []; // Videos of the feed as last rendered (filter and search applied)
 let driveAccess = false; // Whether the current token allows the Drive sync (drive.appdata granted)
 let enablingDriveSync = false; // Waiting for the token asked when turning the Drive sync on
 let driveSyncTimer = null; // Sync planned after a change
@@ -463,8 +464,10 @@ function renderVideoFeed() {
     const groupVideos = buildFeed(getVideoCache(), channelIds);
     const unwatched = groupVideos.filter(video => !watched[video.videoId]);
     const videos = unwatched.filter(video => matchesSearch(video, searchQuery));
+    feedVideos = videos;
 
     renderStats(Object.keys(getChannelNames()).length, videos.length);
+    showMarkAllWatched(activeGroup || activeChannel ? videos.length : 0);
 
     let emptyMessage;
     if (searchQuery.trim()) {
@@ -571,6 +574,25 @@ function toggleWatched(video, card) {
         label: 'Annuler',
         onClick: () => {
             forgetWatch(video.videoId);
+            renderVideoFeed();
+        }
+    });
+}
+
+// "Tout marquer comme vu" on a group or a channel: its videos leave the feed, with "Annuler". They
+// join the watched videos but not the history, which keeps the videos really opened
+function markAllWatched() {
+    const ids = feedVideos.map(video => video.videoId);
+    if (ids.length === 0) return;
+
+    saveWatchedIds([...new Set([...getWatchedIds(), ...ids])]);
+    renderVideoFeed();
+    const many = ids.length > 1 ? 's' : '';
+    showToast(`${ids.length} vidéo${many} marquée${many} comme vue${many}`, {
+        label: 'Annuler',
+        onClick: () => {
+            const marked = new Set(ids);
+            saveWatchedIds(getWatchedIds().filter(id => !marked.has(id)));
             renderVideoFeed();
         }
     });
@@ -832,6 +854,7 @@ function setupEventListeners() {
     });
     setupAccountMenu(refreshDriveSyncUI);
     document.getElementById('drive-sync-toggle')?.addEventListener('click', toggleDriveSync);
+    document.getElementById('mark-all-watched')?.addEventListener('click', markAllWatched);
     setSyncedChangeListener(scheduleDriveSync);
     refreshDriveSyncUI();
 
