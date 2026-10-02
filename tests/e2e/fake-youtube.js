@@ -12,17 +12,23 @@ function svgDataUrl(width, height, color, text) {
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-// The token "popup" answers at once; requests and revocations are recorded in window.__gis
+// The token "popup" answers at once, granting the scopes asked except those a test puts in
+// window.__gis.refused (Google lets the user uncheck them); requests and revocations are recorded
 const FAKE_GIS = `
-    window.__gis = { tokenRequests: [], revoked: [] };
+    window.__gis = { tokenRequests: [], revoked: [], refused: [] };
     window.google = { accounts: { oauth2: {
         initTokenClient(config) {
             return {
                 requestAccessToken(options) {
                     window.__gis.tokenRequests.push(options);
-                    setTimeout(() => config.callback({ access_token: 'token-from-popup', expires_in: 3599 }), 10);
+                    const scope = (options?.scope || config.scope).split(' ')
+                        .filter(asked => !window.__gis.refused.includes(asked)).join(' ');
+                    setTimeout(() => config.callback({ access_token: 'token-from-popup', expires_in: 3599, scope }), 10);
                 }
             };
+        },
+        hasGrantedAllScopes(response, ...scopes) {
+            return scopes.every(scope => (response.scope || '').split(' ').includes(scope));
         },
         revoke(token, done) {
             window.__gis.revoked.push(token);
@@ -40,6 +46,20 @@ export class FakeYouTube {
         this.inactive = new Set(); // Channels whose videos are all more than a year old
         this.calls = []; // Every API call: { endpoint, params, auth }
         this.gisDelay = 300; // The Google script loads asynchronously, like the real one
+        // Drive: files of the hidden app folder, shared by every context this fake is installed on
+        this.driveFiles = new Map(); // id → { name, parents, version, content }
+        this.driveCalls = []; // { method, path, params }
+        this.driveFailure = null; // { status, json } answered to every Drive call
+    }
+
+    // Content of the sync file in the fake Drive, parsed (null if there is none)
+    driveFile() {
+        const file = [...this.driveFiles.values()].find(({ name }) => name === 'global-video-feed.json');
+        return file?.content ? JSON.parse(file.content) : null;
+    }
+
+    driveUploads() {
+        return this.driveCalls.filter(call => call.method === 'PATCH').length;
     }
 
     // A new video appears on UC_A, published now
@@ -68,7 +88,50 @@ export class FakeYouTube {
         if (url.origin === 'https://www.googleapis.com' && url.pathname.startsWith('/youtube/v3/')) {
             return this.answerApi(route, url);
         }
+        if (url.origin === 'https://www.googleapis.com' && /^\/(upload\/)?drive\/v3\/files/.test(url.pathname)) {
+            return this.answerDrive(route, url);
+        }
         return route.abort();
+    }
+
+    // Drive API v3, for the calls the app makes: list, create, get version, download, upload
+    answerDrive(route, url) {
+        const request = route.request();
+        const method = request.method();
+        const params = Object.fromEntries(url.searchParams);
+        const fileId = /\/files\/([^/]+)$/.exec(url.pathname)?.[1];
+        this.driveCalls.push({ method, path: url.pathname, params });
+
+        if (this.driveFailure) {
+            return route.fulfill({ status: this.driveFailure.status, json: this.driveFailure.json });
+        }
+
+        if (!fileId && method === 'GET') {
+            const name = /name = '([^']+)'/.exec(params.q || '')?.[1];
+            const files = [...this.driveFiles]
+                .filter(([, file]) => params.spaces === 'appDataFolder' && file.parents.includes('appDataFolder') && file.name === name)
+                .map(([id, file]) => ({ id, version: String(file.version) }));
+            return route.fulfill({ json: { files } });
+        }
+        if (!fileId && method === 'POST') {
+            const { name, parents = [] } = JSON.parse(request.postData() || '{}');
+            const id = `file${this.driveFiles.size + 1}`;
+            this.driveFiles.set(id, { name, parents, version: 1, content: '' });
+            return route.fulfill({ json: { id } });
+        }
+
+        const file = this.driveFiles.get(fileId);
+        if (!file) {
+            return route.fulfill({ status: 404, json: { error: { code: 404 } } });
+        }
+        if (method === 'PATCH') {
+            file.content = request.postData();
+            file.version++;
+            return route.fulfill({ json: { version: String(file.version) } });
+        }
+        return params.alt === 'media'
+            ? route.fulfill({ contentType: 'application/json', body: file.content })
+            : route.fulfill({ json: { version: String(file.version) } });
     }
 
     answerApi(route, url) {

@@ -134,8 +134,9 @@ export function renderAccount(account) {
     if (nameEl) nameEl.textContent = name;
 }
 
-// Account menu: toggled by the avatar, closed by a click outside or Escape
-export function setupAccountMenu() {
+// Account menu: toggled by the avatar, closed by a click outside or Escape; onOpen() is called
+// when it opens, to bring its content up to date
+export function setupAccountMenu(onOpen = () => {}) {
     const button = document.getElementById('account-button');
     const menu = document.getElementById('account-menu');
     if (!button || !menu) return;
@@ -143,6 +144,7 @@ export function setupAccountMenu() {
     button.addEventListener('click', event => {
         event.stopPropagation();
         const open = menu.hidden;
+        if (open) onOpen();
         menu.hidden = !open;
         button.setAttribute('aria-expanded', String(open));
     });
@@ -154,6 +156,13 @@ export function setupAccountMenu() {
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') closeAccountMenu();
     });
+}
+
+// Drive sync switch of the account menu, and its status line
+export function renderDriveSync(enabled, status) {
+    document.getElementById('drive-sync-toggle')?.setAttribute('aria-checked', String(enabled));
+    const statusEl = document.getElementById('drive-sync-status');
+    if (statusEl) statusEl.textContent = status;
 }
 
 function closeAccountMenu() {

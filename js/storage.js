@@ -18,6 +18,9 @@ const HIDDEN_GROUPS_KEY = 'yt_hidden_groups';
 const WATCHED_IDS_KEY = 'yt_watched_ids';
 const FEED_LAYOUT_KEY = 'yt_feed_layout';
 const SYNC_STAMPS_KEY = 'yt_sync_stamps';
+const DRIVE_SYNC_KEY = 'yt_drive_sync';
+
+let onSyncedChange = () => {};
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -47,6 +50,7 @@ function writeSynced(key, value, before, after) {
     const written = writeJSON(key, value);
     if (written) {
         writeJSON(SYNC_STAMPS_KEY, packStamps(stampChanges(getSyncStamps(), before, after, Date.now())));
+        onSyncedChange();
     }
     return written;
 }
@@ -208,4 +212,42 @@ export function saveCacheVersion(version) {
 // Time of the last change of every synced element (see sync-model.js)
 export function getSyncStamps() {
     return unpackStamps(readJSON(SYNC_STAMPS_KEY, null));
+}
+
+// Call listener after each change to the synced data made on this device
+export function setSyncedChangeListener(listener) {
+    onSyncedChange = listener;
+}
+
+// This device's synced data and its stamps (see sync-model.js)
+export function getSyncedReplica() {
+    return {
+        data: { groups: getUserGroups(), hiddenGroups: getHiddenGroups(), watchedIds: getWatchedIds(), history: getWatchHistory() },
+        stamps: getSyncStamps()
+    };
+}
+
+// Replace them with a merged version, which comes with its own stamps
+export function saveSyncedReplica({ data, stamps }) {
+    return [
+        writeJSON(GROUPS_KEY, data.groups),
+        writeJSON(HIDDEN_GROUPS_KEY, data.hiddenGroups),
+        writeJSON(WATCHED_IDS_KEY, data.watchedIds),
+        writeJSON(WATCH_HISTORY_KEY, data.history),
+        writeJSON(SYNC_STAMPS_KEY, packStamps(stamps))
+    ].every(Boolean);
+}
+
+// Google Drive sync on this device: { enabled, fileId, version, uploadedLast, syncedAt }
+export function getDriveSyncState() {
+    const state = readJSON(DRIVE_SYNC_KEY, {});
+    return state && typeof state === 'object' ? state : {};
+}
+
+export function saveDriveSyncState(state) {
+    return writeJSON(DRIVE_SYNC_KEY, state);
+}
+
+export function clearDriveSyncState() {
+    remove(DRIVE_SYNC_KEY);
 }

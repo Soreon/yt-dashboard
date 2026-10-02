@@ -1,11 +1,14 @@
 // Global Video Feed - entry point: authentication, loading and sync
 
-import { AUTO_SYNC_CHECK_MS, CLIENT_ID, SCOPES, SYNC_INTERVAL_MS } from './config.js';
+import { AUTO_SYNC_CHECK_MS, CLIENT_ID, DRIVE_SCOPE, DRIVE_SYNC_DELAY_MS, SCOPES, SYNC_INTERVAL_MS } from './config.js';
 import {
     AuthError, fetchAllSubscriptions, fetchLatestVideos, fetchMyChannel, fetchUploadsPlaylists, fetchVideoDetails
 } from './api.js';
+import { DriveAccessError } from './drive.js';
+import { syncWithDrive } from './drive-sync.js';
 import {
-    applyVideoDetails, buildFeed, keepChannels, matchesSearch, mergeChannelVideos, videosMissingDetails
+    applyVideoDetails, buildFeed, getRelativeTime, keepChannels, matchesSearch, mergeChannelVideos,
+    videosMissingDetails
 } from './feed.js';
 import { groupsRouteFromHash, renderGroupsPage, setupGroupsPage } from './groups.js';
 import {
@@ -13,15 +16,16 @@ import {
 } from './history-model.js';
 import { readZipText } from './zip.js';
 import {
-    clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
-    getFeedLayout, getGuideCollapsed, getHiddenGroups, getLastSync, getPlaylistCache, getUserGroups, getVideoCache,
-    getWatchHistory, getWatchedIds, hasStoredSession,
-    saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveFeedLayout,
-    saveGuideCollapsed, saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory, saveWatchedIds
+    clearAccount, clearAuthData, clearDriveSyncState, getAccount, getAuthData, getCacheVersion, getChannelAvatars,
+    getChannelNames, getDriveSyncState, getFeedLayout, getGuideCollapsed, getHiddenGroups, getLastSync,
+    getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory, getWatchedIds, hasStoredSession,
+    saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveDriveSyncState,
+    saveFeedLayout, saveGuideCollapsed, saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory,
+    saveWatchedIds, setSyncedChangeListener
 } from './storage.js';
 import {
-    clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderFilterButtons, renderHistory, renderStats,
-    renderVideoGrid, setActiveView, setFeedLayout, setLoading, setSyncing, setupAccountMenu, showError,
+    clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderDriveSync, renderFilterButtons, renderHistory,
+    renderStats, renderVideoGrid, setActiveView, setFeedLayout, setLoading, setSyncing, setupAccountMenu, showError,
     showNewVideosPill, showToast, updateAuthUI
 } from './ui.js';
 
@@ -38,6 +42,11 @@ let activeChannel = null; // Channel the feed is filtered on, from the groups pa
 let searchQuery = ''; // Text typed in the search box
 let currentView = 'feed'; // 'feed', 'groups' or 'history'
 let watchedSinceRender = false; // Videos opened since the last render, hidden when coming back
+let driveAccess = false; // Whether the current token allows the Drive sync (drive.appdata granted)
+let enablingDriveSync = false; // Waiting for the token asked when turning the Drive sync on
+let driveSyncTimer = null; // Sync planned after a change
+let driveSyncing = false;
+let driveSyncError = null; // Message of the last failed sync
 
 // Initialize Google Identity Services
 function initializeGoogleAuth() {
@@ -45,6 +54,11 @@ function initializeGoogleAuth() {
         client_id: CLIENT_ID,
         scope: SCOPES,
         callback: handleAuthResponse,
+        // Popup closed or blocked
+        error_callback: () => {
+            enablingDriveSync = false;
+            refreshDriveSyncUI();
+        }
     });
 }
 
@@ -60,26 +74,51 @@ function isValidAuthData(authData) {
 
 // Handle authentication response
 function handleAuthResponse(response) {
+    const enabling = enablingDriveSync;
+    enablingDriveSync = false;
+
     if (response.error !== undefined) {
         showError(`Erreur d'authentification: ${response.error}`);
+        refreshDriveSyncUI();
         return;
     }
 
     // Validate expires_in
     if (!response.expires_in || response.expires_in <= 0) {
         showError('Réponse d\'authentification invalide');
+        refreshDriveSyncUI();
         return;
     }
 
+    const wasSignedIn = accessToken !== null;
     accessToken = response.access_token;
     tokenExpiresAt = Date.now() + (response.expires_in * SECONDS_TO_MILLISECONDS);
+    // Google lets the user grant YouTube and refuse Drive
+    driveAccess = google.accounts.oauth2.hasGrantedAllScopes(response, DRIVE_SCOPE);
 
     // Save with expiration timestamp
     saveAuthData({
         access_token: response.access_token,
         expires_in: response.expires_in,
-        expires_at: tokenExpiresAt
+        expires_at: tokenExpiresAt,
+        drive: driveAccess
     });
+
+    if (enabling && driveAccess) {
+        saveDriveSyncState({ ...getDriveSyncState(), enabled: true });
+    } else if (enabling) {
+        showError('Accès à Google Drive refusé : la synchronisation reste désactivée.');
+    } else if (getDriveSyncState().enabled && !driveAccess) {
+        saveDriveSyncState({ ...getDriveSyncState(), enabled: false });
+        showError('Accès à Google Drive refusé : la synchronisation est désactivée.');
+    }
+
+    // Turned on from the account menu: already signed in, only the sync is new
+    if (enabling && wasSignedIn) {
+        refreshDriveSyncUI();
+        runDriveSync();
+        return;
+    }
 
     updateAuthUI(true);
     loadSubscriptions();
@@ -90,8 +129,10 @@ function requestAccessToken() {
     if (accessToken) {
         loadSubscriptions();
     } else if (tokenClient) {
-        // Empty prompt: the consent screen is only shown the first time
-        tokenClient.requestAccessToken({ prompt: '' });
+        // Empty prompt: the consent screen is only shown the first time. Drive too, when the sync is on
+        tokenClient.requestAccessToken(getDriveSyncState().enabled
+            ? { prompt: '', scope: `${SCOPES} ${DRIVE_SCOPE}` }
+            : { prompt: '' });
     } else {
         showError('Le service Google n\'est pas encore chargé, réessayez dans un instant.');
     }
@@ -115,6 +156,7 @@ function restoreSession() {
     if (Date.now() < authData.expires_at) {
         accessToken = authData.access_token;
         tokenExpiresAt = authData.expires_at;
+        driveAccess = authData.drive === true;
         updateAuthUI(true);
         loadSubscriptions();
     }
@@ -132,6 +174,12 @@ function signOut() {
         clearAuthData();
         clearAccount();
 
+        // The next account may not be the same: the sync is turned on again by hand
+        driveAccess = false;
+        clearTimeout(driveSyncTimer);
+        clearDriveSyncState();
+        refreshDriveSyncUI();
+
         updateAuthUI(false);
         clearUI();
     }
@@ -141,6 +189,7 @@ function signOut() {
 function handleSessionExpired() {
     accessToken = null;
     updateAuthUI(false);
+    refreshDriveSyncUI();
     showError('Session expirée. Reconnectez-vous pour mettre à jour le flux.');
 }
 
@@ -280,8 +329,9 @@ async function loadSubscriptions() {
     let loaded = false;
 
     try {
-        // First, load videos from cache immediately
+        // First, load videos from cache immediately, and get the changes made on other devices
         renderVideoFeed();
+        runDriveSync();
 
         // Fetch all subscriptions, and the user's name and avatar for the masthead
         const [subscriptions, account] = await Promise.all([
@@ -540,6 +590,7 @@ function autoSync() {
     }
 
     syncAllChannels(false, { background: true });
+    runDriveSync();
 }
 
 // Check periodically and when the user comes back to the tab
@@ -553,6 +604,92 @@ function startAutoSync() {
             renderVideoFeed();
         }
     }, { passive: true });
+}
+
+// --- Google Drive sync ---
+
+// Sync the groups and the watched videos with Drive, when the sync is on and the session allows it
+async function runDriveSync() {
+    clearTimeout(driveSyncTimer);
+    driveSyncTimer = null;
+    if (!getDriveSyncState().enabled || !accessToken || !driveAccess || Date.now() >= tokenExpiresAt) return;
+
+    driveSyncing = true;
+    driveSyncError = null;
+    refreshDriveSyncUI();
+    try {
+        const { changed } = await syncWithDrive(accessToken);
+        if (changed) showSyncedChanges();
+    } catch (error) {
+        if (error instanceof AuthError) {
+            handleSessionExpired();
+        } else if (error instanceof DriveAccessError) {
+            driveAccess = false;
+            saveDriveSyncState({ ...getDriveSyncState(), enabled: false });
+            showError('Accès à Google Drive retiré : la synchronisation est désactivée.');
+        } else {
+            console.error('Error during Drive sync:', error);
+            driveSyncError = 'Échec de la dernière synchronisation';
+        }
+    } finally {
+        driveSyncing = false;
+        refreshDriveSyncUI();
+    }
+}
+
+// A change to the synced data: send it after a pause, so that several changes go together
+function scheduleDriveSync() {
+    if (!getDriveSyncState().enabled) return;
+    clearTimeout(driveSyncTimer);
+    driveSyncTimer = setTimeout(runDriveSync, DRIVE_SYNC_DELAY_MS);
+}
+
+// Data merged from another device: drop the filter on a group that no longer exists, show the rest
+function showSyncedChanges() {
+    if (activeGroup && !Object.hasOwn(getUserGroups(), activeGroup)) {
+        activeGroup = null;
+    }
+    refreshFilterButtons();
+    renderView();
+}
+
+// Account menu switch: turning the sync on asks Google for Drive access (once), then syncs
+function toggleDriveSync() {
+    const state = getDriveSyncState();
+    if (state.enabled) {
+        clearTimeout(driveSyncTimer);
+        saveDriveSyncState({ ...state, enabled: false });
+        refreshDriveSyncUI();
+    } else if (accessToken && driveAccess) {
+        saveDriveSyncState({ ...state, enabled: true });
+        runDriveSync();
+    } else if (tokenClient) {
+        enablingDriveSync = true;
+        refreshDriveSyncUI();
+        tokenClient.requestAccessToken({ prompt: '', scope: `${SCOPES} ${DRIVE_SCOPE}` });
+    } else {
+        showError('Le service Google n\'est pas encore chargé, réessayez dans un instant.');
+    }
+}
+
+// Switch and status line of the account menu
+function refreshDriveSyncUI() {
+    const state = getDriveSyncState();
+    let status;
+    if (enablingDriveSync) {
+        status = 'Autorisation de Google Drive…';
+    } else if (!state.enabled) {
+        status = 'Désactivée';
+    } else if (driveSyncing) {
+        status = 'Synchronisation…';
+    } else if (driveSyncError) {
+        status = driveSyncError;
+    } else if (!accessToken) {
+        status = 'Reconnectez-vous pour synchroniser';
+    } else {
+        status = state.syncedAt ? `Synchronisé ${getRelativeTime(new Date(state.syncedAt).toISOString())}` : 'Activée';
+    }
+    renderDriveSync(Boolean(state.enabled), status);
 }
 
 // Render the filter buttons for the current groups
@@ -620,8 +757,14 @@ function waitForGoogleAuth() {
 function setupEventListeners() {
     document.getElementById('signout-button')?.addEventListener('click', signOut);
     document.getElementById('authorize-button')?.addEventListener('click', requestAccessToken);
-    document.getElementById('force-sync-button')?.addEventListener('click', () => syncAllChannels(true));
-    setupAccountMenu();
+    document.getElementById('force-sync-button')?.addEventListener('click', () => {
+        syncAllChannels(true);
+        runDriveSync();
+    });
+    setupAccountMenu(refreshDriveSyncUI);
+    document.getElementById('drive-sync-toggle')?.addEventListener('click', toggleDriveSync);
+    setSyncedChangeListener(scheduleDriveSync);
+    refreshDriveSyncUI();
 
     // Menu button: collapse / expand the left navigation (remembered)
     document.body.classList.toggle('guide-collapsed', getGuideCollapsed());
@@ -655,10 +798,14 @@ function setupEventListeners() {
         importFile.value = '';
     });
 
-    // Back on the tab after watching: hide the videos opened meanwhile
+    // Back on the tab after watching: hide the videos opened meanwhile.
+    // Leaving it: send the changes waiting for Drive now, before going to another device
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && watchedSinceRender) {
             renderView();
+        }
+        if (document.visibilityState === 'hidden' && driveSyncTimer) {
+            runDriveSync();
         }
     });
     document.getElementById('search-form')?.addEventListener('submit', event => {

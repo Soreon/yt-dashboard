@@ -13,6 +13,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 - **Recherche** dans le fil, par titre ou nom de chaîne.
 - **Interface inspirée de YouTube** : mêmes codes de mise en page (cartes avec durée, vues et avatar de la chaîne, filtres en pastilles, menu latéral), thème clair ou sombre selon le système, adaptée au mobile.
 - **Cache local** : le fil s'affiche instantanément depuis le cache, y compris quand la session a expiré.
+- **Synchronisation entre appareils** (facultative) : les groupes et les vidéos vues se retrouvent sur tous vos appareils, via un dossier caché de votre Google Drive.
 
 ## Installation
 
@@ -26,6 +27,11 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
    - *Authorized JavaScript origins* : `http://localhost:8000`, plus votre domaine de production le cas échéant.
 
 Aucune clé API n'est nécessaire : toutes les requêtes passent par le jeton OAuth.
+
+Pour la synchronisation entre appareils (facultative) :
+
+5. **APIs & Services > Library** : activez **Google Drive API**.
+6. **Google Auth Platform > Accès aux données** (*Data access*) : « Ajouter ou supprimer des niveaux d'accès », cochez `.../auth/drive.appdata` (ou ajoutez-le manuellement), puis enregistrez. Ce niveau d'accès est classé non sensible : aucune vérification de Google n'est demandée.
 
 ### 2. Configurer l'application
 
@@ -63,7 +69,8 @@ Puis ouvrez http://localhost:8000. L'origine doit correspondre exactement à une
 - **Filtres** : « Tous » ou un groupe. Le filtre choisi est conservé après une synchronisation.
 - **Synchronisation automatique** : toutes les 5 minutes et à chaque retour sur l'onglet, l'application synchronise si la dernière synchronisation date de plus de 30 minutes. Si de nouvelles vidéos arrivent alors que vous êtes descendu dans le fil, une pastille « Nouvelles vidéos » les affiche au lieu de déplacer la page.
 - **Session expirée** (le jeton Google dure environ 1 h) : le fil en cache reste affiché et la synchronisation automatique s'arrête. Cliquez sur « Se connecter » pour reprendre.
-- **Se déconnecter** (menu de votre avatar) : révoque le jeton et vide l'écran. Les caches et les groupes restent dans le navigateur.
+- **Se déconnecter** (menu de votre avatar) : révoque le jeton et vide l'écran. Les caches et les groupes restent dans le navigateur. La synchronisation Google Drive est désactivée : le compte suivant n'est peut-être pas le même.
+- **Synchroniser avec Google Drive** (interrupteur du menu de votre avatar) : la première activation demande à Google l'accès à un dossier caché de votre Drive, réservé à l'application (`drive.appdata`) ; elle ne voit rien d'autre de votre Drive. Si vous refusez cet accès (Google permet de décocher chaque autorisation), l'application fonctionne comme avant, sans synchronisation. Une fois activée sur chaque appareil, les **groupes** (avec leur ordre, Favoris compris), les **groupes masqués** et les **vidéos vues** (historique et import Takeout compris) se rejoignent : à la connexion, à chaque retour sur l'onglet, quelques secondes après chaque modification, en quittant l'onglet, et avec l'icône ⟳. Les modifications faites des deux côtés entre deux synchronisations sont fusionnées : chaque groupe, chaîne ou vidéo suit l'appareil qui l'a modifié en dernier, et la première synchronisation additionne tout, sans rien supprimer. Restent propres à chaque appareil : l'affichage en grille ou en liste, le menu réduit, et les caches (reconstruits depuis YouTube). Comme le reste, la synchronisation ne fonctionne que pendant la session Google : les modifications faites ensuite partent à la connexion suivante. Pour effacer les données synchronisées : dans Google Drive, **Paramètres > Gérer les applications**, puis sur l'application (sous le nom de son écran de consentement OAuth) **Options > Supprimer les données d'application masquées**.
 
 ## Fonctionnement
 
@@ -95,6 +102,8 @@ Modules JavaScript natifs, chargés directement par le navigateur, sans étape d
 | [js/history-model.js](js/history-model.js) | Vidéos vues, regroupement par jour et import Google Takeout, sans DOM : testée unitairement |
 | [js/zip.js](js/zip.js) | Lecture d'une entrée d'archive zip avec la décompression native du navigateur : testée unitairement |
 | [js/groups-model.js](js/groups-model.js) | Création, renommage, ajout et retrait de chaînes, activité des groupes, export et import, sans DOM : testée unitairement |
+| [js/drive.js](js/drive.js) | Appels à l'API Google Drive v3 : le fichier de synchronisation du dossier caché de l'application |
+| [js/drive-sync.js](js/drive-sync.js) | Synchronisation avec Drive : lecture du fichier si un autre appareil l'a modifié, fusion, envoi |
 | [js/sync-model.js](js/sync-model.js) | Datation des changements et fusion des données de deux appareils (groupes, vidéos vues, historique), sans DOM : testée unitairement |
 
 La mise en page est dans [index.html](index.html) et [styles.css](styles.css).
@@ -136,6 +145,7 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_hidden_groups` | Noms des groupes masqués dans les filtres du fil |
 | `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
 | `yt_guide_collapsed` | Menu latéral réduit ou non |
+| `yt_drive_sync` | Synchronisation Google Drive sur cet appareil : activée ou non, fichier et version du dernier échange |
 | `yt_feed_layout` | Affichage du fil : grille ou liste |
 | `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus, pour la page Historique) |
 | `yt_watched_ids` | Identifiants de toutes les vidéos vues ou importées, sans limite, pour les masquer du fil |
@@ -156,12 +166,15 @@ Le quota par défaut est de 10 000 unités par jour et par projet Google Cloud. 
 
 Exemple avec 200 abonnements : environ 5 unités par chargement, plus environ 220 unités par synchronisation, soit une cinquantaine de synchronisations par jour au maximum. La synchronisation automatique est limitée à une toutes les 30 minutes, et seulement pendant la session Google (environ 1 h) ; l'icône de synchronisation ignore cette limite.
 
+La synchronisation Google Drive a son propre quota, gratuit et très large (325 000 unités par minute et par utilisateur) : chaque échange coûte 5 unités pour vérifier si un autre appareil a écrit, plus 200 pour lire le fichier s'il a changé et 50 pour l'envoyer s'il y a du nouveau.
+
 ## Sécurité
 
 - Les textes venant de l'API (titres, noms de chaînes) sont échappés avant d'être insérés dans la page (`escapeHtml`).
 - Les identifiants de vidéos sont validés avant de construire un lien (`isValidYouTubeId`).
 - Le jeton d'accès est stocké dans `localStorage` : il est lisible par tout script exécuté sur la même origine. Il est en lecture seule et expire au bout d'environ 1 h.
 - Le Client ID OAuth est public par nature. Limitez les origines autorisées aux seuls domaines où l'application est servie.
+- La synchronisation n'utilise que `drive.appdata` : un dossier caché propre à l'application, invisible dans Drive et inaccessible aux autres applications ; elle ne peut ni lire ni modifier vos autres fichiers. Le fichier relu depuis Drive est validé avant d'être fusionné.
 
 ## Limites connues
 
