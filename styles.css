@@ -667,6 +667,16 @@ body.guide-collapsed .page {
     font-weight: 500;
 }
 
+/* Premiere to come, or live: in capitals, red when live (as on YouTube) */
+.status-badge {
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.live-badge {
+    background-color: #cc0000;
+}
+
 .details {
     display: flex;
     gap: 12px;
@@ -826,8 +836,14 @@ body.guide-collapsed .page {
     grid-area: 1 / 6;
 }
 
+/* Live viewers or scheduled time of a premiere: over both columns */
+.video-list .video-status {
+    grid-area: 1 / 5 / 2 / 7;
+}
+
 .video-list .video-views,
-.video-list .video-age {
+.video-list .video-age,
+.video-list .video-status {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -884,7 +900,8 @@ body.guide-collapsed .page {
     }
 
     .video-list .video-views,
-    .video-list .video-age {
+    .video-list .video-age,
+    .video-list .video-status {
         white-space: normal;
     }
 

@@ -65,7 +65,37 @@ export function videosMissingDetails(videoCache) {
         .map(video => video.videoId);
 }
 
-// Copy of the video cache with fetched details ({ videoId: { duration, views } }) applied
+// Videos of the cache shown as live or upcoming: their details are refreshed at every sync, to
+// follow them until they are over
+export function videosLiveOrUpcoming(videoCache) {
+    return Object.values(videoCache).flat().filter(video => video.live).map(video => video.videoId);
+}
+
+// Details of a video from the videos.list API (contentDetails, statistics, liveStreamingDetails):
+// duration, views, and for a premiere or a live, whether it is upcoming (with its scheduled
+// time) or live (with its viewers). Once over, it is a video like any other (live undefined)
+export function videoDetailsFromApi(item) {
+    const viewCount = item.statistics?.viewCount;
+    const stream = item.liveStreamingDetails;
+    let live;
+    if (stream && !stream.actualEndTime) {
+        if (stream.actualStartTime) {
+            live = 'live';
+        } else if (stream.scheduledStartTime) {
+            live = 'upcoming';
+        }
+    }
+
+    return {
+        duration: parseIsoDuration(item.contentDetails?.duration),
+        views: viewCount === undefined ? null : Number(viewCount),
+        live,
+        scheduledAt: live === 'upcoming' ? stream.scheduledStartTime : undefined,
+        viewers: live === 'live' && stream.concurrentViewers !== undefined ? Number(stream.concurrentViewers) : undefined
+    };
+}
+
+// Copy of the video cache with fetched details ({ videoId: { duration, views, live... } }) applied
 export function applyVideoDetails(videoCache, details) {
     return Object.fromEntries(Object.entries(videoCache).map(([channelId, videos]) => [
         channelId,
@@ -94,22 +124,51 @@ export function formatDuration(totalSeconds) {
     return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
-// View count as shown by YouTube in French: "345 vues", "1,2 k vues", "3,4 M de vues"
-export function formatViews(views) {
-    if (views === null || views === undefined) return '';
-    if (views === 0) return 'Aucune vue';
-    if (views === 1) return '1 vue';
-    if (views < 1000) return `${views} vues`;
+// A count as YouTube words it in French, for a noun: "345 vues", "1,2 k vues", "3,4 M de vues".
+// YouTube truncates (1 290 → "1,2 k") and keeps one decimal below 10 of the unit
+function formatCount(count, singular, plural) {
+    if (count === 1) return `1 ${singular}`;
+    if (count < 1000) return `${count} ${plural}`;
 
-    // YouTube truncates (1 290 → "1,2 k") and keeps one decimal below 10 of the unit
     const compact = (value, unit) => {
         const shown = value < 10 ? Math.floor(value * 10) / 10 : Math.floor(value);
         return `${String(shown).replace('.', ',')} ${unit}`;
     };
 
-    if (views < 1e6) return `${compact(views / 1e3, 'k')} vues`;
-    if (views < 1e9) return `${compact(views / 1e6, 'M')} de vues`;
-    return `${compact(views / 1e9, 'Md')} de vues`;
+    if (count < 1e6) return `${compact(count / 1e3, 'k')} ${plural}`;
+    if (count < 1e9) return `${compact(count / 1e6, 'M')} de ${plural}`;
+    return `${compact(count / 1e9, 'Md')} de ${plural}`;
+}
+
+// View count as shown by YouTube in French: "345 vues", "1,2 k vues", "3,4 M de vues"
+export function formatViews(views) {
+    if (views === null || views === undefined) return '';
+    if (views === 0) return 'Aucune vue';
+    return formatCount(views, 'vue', 'vues');
+}
+
+// Viewers of a live: "1,2 k spectateurs", or just "En direct" when unknown
+export function formatViewers(viewers) {
+    return Number.isFinite(viewers) && viewers > 0 ? formatCount(viewers, 'spectateur', 'spectateurs') : 'En direct';
+}
+
+// Scheduled time of a premiere: "Prévue aujourd'hui à 18:00", "demain à 9:30", "le 12 oct. à 20:00"
+export function formatScheduled(dateString, now = Date.now()) {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Prochainement';
+
+    const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(date);
+    const day = new Date(now);
+    const tomorrow = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+    let when;
+    if (date.toDateString() === day.toDateString()) {
+        when = 'aujourd\'hui';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+        when = 'demain';
+    } else {
+        when = `le ${new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(date)}`;
+    }
+    return `Prévue ${when} à ${time}`;
 }
 
 // Copy of a { channelId: value } map limited to the given channels
@@ -118,7 +177,8 @@ export function keepChannels(map, channelIds) {
     return Object.fromEntries(Object.entries(map).filter(([channelId]) => kept.has(channelId)));
 }
 
-// Flatten the video cache into one list, newest first, optionally limited to some channels
+// Flatten the video cache into one list, optionally limited to some channels: what is live
+// first, then the upcoming premieres (the soonest first), then the videos, newest first
 export function buildFeed(videoCache, channelIds = null) {
     const allowed = channelIds ? new Set(channelIds) : null;
     const videos = [];
@@ -128,7 +188,11 @@ export function buildFeed(videoCache, channelIds = null) {
         (channelVideos || []).forEach(video => videos.push({ ...video, channelId }));
     });
 
+    const rank = video => ({ live: 0, upcoming: 1 }[video.live] ?? 2);
     return videos.sort((a, b) => {
+        if (rank(a) !== rank(b)) return rank(a) - rank(b);
+        if (rank(a) === 1) return (Date.parse(a.scheduledAt) || 0) - (Date.parse(b.scheduledAt) || 0);
+
         const dateA = new Date(a.publishedAt || 0).getTime();
         const dateB = new Date(b.publishedAt || 0).getTime();
         return dateB - dateA;

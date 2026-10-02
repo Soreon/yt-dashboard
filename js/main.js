@@ -11,7 +11,7 @@ import { DriveAccessError } from './drive.js';
 import { syncWithDrive } from './drive-sync.js';
 import {
     applyVideoDetails, buildFeed, channelsDue, getRelativeTime, keepChannels, matchesSearch, mergeChannelVideos,
-    nextQuotaReset, quotaResetText, videosMissingDetails, videosToFetch
+    nextQuotaReset, quotaResetText, videosLiveOrUpcoming, videosMissingDetails, videosToFetch
 } from './feed.js';
 import { groupsRouteFromHash, renderGroupsPage, setupGroupsPage } from './groups.js';
 import {
@@ -339,11 +339,13 @@ async function syncAllChannels(force = false, { background = false } = {}) {
         });
 
         // Durations and view counts: refresh the recent videos just fetched (views still moving)
-        // and fill in any cached video that has none yet
+        // and the premieres not over yet, and fill in any cached video that has none yet
         const fetchedIds = results.filter(Boolean).flat()
             .filter(item => now - Date.parse(item.snippet?.publishedAt) < DETAILS_REFRESH_MS)
             .map(item => item.snippet?.resourceId?.videoId);
-        const detailIds = [...new Set([...fetchedIds, ...videosMissingDetails(videoCache)])].filter(Boolean);
+        const detailIds = [...new Set([
+            ...fetchedIds, ...videosLiveOrUpcoming(videoCache), ...videosMissingDetails(videoCache)
+        ])].filter(Boolean);
         const details = await fetchVideoDetails(detailIds, accessToken).catch(unlessQuota({}));
 
         // Save updated cache and timestamps

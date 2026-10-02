@@ -126,6 +126,34 @@ test('a channel read long ago is read further back, and its unwatched videos sta
     expect((await readStorage(page, 'yt_video_cache')).UC_A).toHaveLength(13); // Beyond 10: all unwatched
 });
 
+test('a premiere comes first with its time, then live with its viewers, then like any video', async ({ page, youtube }) => {
+    youtube.publishVideo('premiere', Date.now() - 3 * 24 * HOUR);
+    youtube.upcoming.set('premiere', Date.now() + 2 * HOUR);
+    await openApp(page, signedIn());
+    await expect(feedCards(page)).toHaveCount(15); // The 5 latest of each channel, the premiere among them
+    await waitForSync(page);
+
+    const first = feedCards(page).first();
+    await expect(first.locator('.video-title')).toHaveText('Nouvelle vidéo premiere');
+    await expect(first.locator('.duration-badge')).toHaveText('Première');
+    await expect(first.locator('.video-stats')).toHaveText(/^Prévue (aujourd'hui|demain) à \d\d:\d\d$/);
+
+    youtube.upcoming.delete('premiere');
+    youtube.live.add('premiere');
+    await page.locator('#force-sync-button').click();
+    await waitForSync(page);
+    await expect(first.locator('.live-badge')).toHaveText('En direct');
+    await expect(first.locator('.video-stats')).toHaveText('1,2 k spectateurs');
+
+    // Over: back among the videos of three days ago, with its duration
+    youtube.live.delete('premiere');
+    await page.locator('#force-sync-button').click();
+    await waitForSync(page);
+    await expect(first.locator('.video-title')).not.toHaveText('Nouvelle vidéo premiere');
+    const premiere = feedCards(page).filter({ hasText: 'Nouvelle vidéo premiere' });
+    await expect(premiere.locator('.duration-badge')).toHaveText(/^\d+:\d\d$/);
+});
+
 test('Shorts are left out, with a fallback when a long-form playlist is missing', async ({ page, youtube }) => {
     youtube.noLongForm.add('UC_C');
     await openApp(page, signedIn());

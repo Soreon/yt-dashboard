@@ -45,6 +45,8 @@ export class FakeYouTube {
         this.quotaLeft = Infinity; // API calls answered before the daily quota is used up
         this.newVideos = []; // Videos published on UC_A during the test: { videoId, publishedAt }
         this.inactive = new Set(); // Channels whose videos are all more than a year old
+        this.upcoming = new Map(); // Premieres to come: videoId → scheduled time
+        this.live = new Set(); // Premieres being broadcast
         this.calls = []; // Every API call: { endpoint, params, auth }
         this.gisDelay = 300; // The Google script loads asynchronously, like the real one
         // Drive: files of the hidden app folder, shared by every context this fake is installed on
@@ -64,8 +66,8 @@ export class FakeYouTube {
     }
 
     // A new video appears on UC_A, published now
-    publishVideo(videoId) {
-        this.newVideos.push({ videoId, publishedAt: Date.now() });
+    publishVideo(videoId, publishedAt = Date.now()) {
+        this.newVideos.push({ videoId, publishedAt });
     }
 
     count(endpoint) {
@@ -221,7 +223,9 @@ export class FakeYouTube {
             items: ids.split(',').map((id, index) => ({
                 id,
                 contentDetails: { duration: id.includes('_s') ? 'PT45S' : `PT${10 + index}M${index}S` },
-                statistics: { viewCount: String(1000 * (index + 1) + 290) }
+                statistics: { viewCount: String(1000 * (index + 1) + 290) },
+                ...(this.upcoming.has(id) && { liveStreamingDetails: { scheduledStartTime: new Date(this.upcoming.get(id)).toISOString() } }),
+                ...(this.live.has(id) && { liveStreamingDetails: { actualStartTime: new Date().toISOString(), concurrentViewers: '1234' } })
             }))
         };
     }

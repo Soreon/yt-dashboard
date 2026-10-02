@@ -1,7 +1,7 @@
 // YouTube Data API v3, authenticated with the OAuth access token
 
 import { BATCH_SIZE, VIDEOS_PER_SYNC } from './config.js';
-import { longFormPlaylistId, parseIsoDuration } from './feed.js';
+import { longFormPlaylistId, videoDetailsFromApi } from './feed.js';
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -104,7 +104,8 @@ export async function fetchUploadsPlaylists(channelIds, token) {
     return playlists;
 }
 
-// Duration (seconds) and view count of videos, in parallel batches of 50: { videoId: { duration, views } }
+// Duration (seconds), view count and live state of videos, in parallel batches of 50:
+// { videoId: { duration, views, live, scheduledAt, viewers } } (see videoDetailsFromApi)
 export async function fetchVideoDetails(videoIds, token) {
     const batches = [];
     for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
@@ -114,13 +115,11 @@ export async function fetchVideoDetails(videoIds, token) {
     const details = {};
     await Promise.all(batches.map(async batch => {
         try {
-            const data = await apiFetch('videos', { part: 'contentDetails,statistics', id: batch.join(',') }, token);
+            // The parts asked do not change the cost: 1 unit per request
+            const params = { part: 'contentDetails,statistics,liveStreamingDetails', id: batch.join(',') };
+            const data = await apiFetch('videos', params, token);
             (data.items || []).forEach(video => {
-                const viewCount = video.statistics?.viewCount;
-                details[video.id] = {
-                    duration: parseIsoDuration(video.contentDetails?.duration),
-                    views: viewCount === undefined ? null : Number(viewCount)
-                };
+                details[video.id] = videoDetailsFromApi(video);
             });
         } catch (error) {
             if (error instanceof AuthError || error instanceof QuotaError) throw error;

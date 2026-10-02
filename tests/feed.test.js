@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 
 import { CATCH_UP_VIDEOS, MAX_KEPT_PER_CHANNEL, MAX_VIDEOS_PER_CHANNEL, VIDEOS_PER_SYNC } from '../js/config.js';
 import {
-    applyVideoDetails, buildFeed, channelsDue, channelSyncInterval, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
-    longFormPlaylistId, matchesSearch, mergeChannelVideos, nextQuotaReset, normalizeText, parseIsoDuration,
-    quotaResetText, toCachedVideo, videosMissingDetails, videosToFetch
+    applyVideoDetails, buildFeed, channelsDue, channelSyncInterval, formatDuration, formatScheduled, formatViewers,
+    formatViews, getRelativeTime, isValidYouTubeId, keepChannels, longFormPlaylistId, matchesSearch,
+    mergeChannelVideos, nextQuotaReset, normalizeText, parseIsoDuration, quotaResetText, toCachedVideo,
+    videoDetailsFromApi, videosLiveOrUpcoming, videosMissingDetails, videosToFetch
 } from '../js/feed.js';
 
 // playlistItems API item, as returned by the YouTube Data API
@@ -261,4 +262,37 @@ test('channelsDue keeps the channels whose wait is over', () => {
     const fetchedAt = { UC_ACTIVE: now - 60 * 1000, UC_SLOW: now - 2 * day, UC_OLD: now - 3 * day };
 
     assert.deepEqual(channelsDue(['UC_ACTIVE', 'UC_SLOW', 'UC_OLD', 'UC_NEW'], cache, fetchedAt, now), ['UC_ACTIVE', 'UC_SLOW', 'UC_NEW']);
+});
+
+test('videoDetailsFromApi reads the duration, the views and whether a premiere is upcoming or live', () => {
+    const base = { contentDetails: { duration: 'PT12M5S' }, statistics: { viewCount: '42' } };
+    assert.deepEqual(videoDetailsFromApi(base), { duration: 725, views: 42, live: undefined, scheduledAt: undefined, viewers: undefined });
+    assert.deepEqual(videoDetailsFromApi({ ...base, liveStreamingDetails: { scheduledStartTime: '2026-10-03T18:00:00Z' } }),
+        { duration: 725, views: 42, live: 'upcoming', scheduledAt: '2026-10-03T18:00:00Z', viewers: undefined });
+    assert.deepEqual(videoDetailsFromApi({ ...base, liveStreamingDetails: { actualStartTime: '2026-10-03T18:01:00Z', concurrentViewers: '1234' } }),
+        { duration: 725, views: 42, live: 'live', scheduledAt: undefined, viewers: 1234 });
+    assert.equal(videoDetailsFromApi({ ...base, liveStreamingDetails: { actualStartTime: 'x', actualEndTime: 'y' } }).live, undefined, 'over');
+    assert.equal(videoDetailsFromApi({}).views, null);
+});
+
+test('buildFeed puts what is live first, then the premieres to come, the soonest first', () => {
+    const feed = buildFeed({
+        A: [cached('old', '2026-01-01T00:00:00Z'), { ...cached('later', '2025-12-01T00:00:00Z'), live: 'upcoming', scheduledAt: '2026-01-09T00:00:00Z' }],
+        B: [cached('new', '2026-01-05T00:00:00Z'), { ...cached('soon', '2025-12-02T00:00:00Z'), live: 'upcoming', scheduledAt: '2026-01-08T00:00:00Z' }],
+        C: [{ ...cached('now', '2025-11-01T00:00:00Z'), live: 'live' }]
+    });
+    assert.deepEqual(feed.map(v => v.videoId), ['now', 'soon', 'later', 'new', 'old']);
+    assert.deepEqual(videosLiveOrUpcoming({ A: feed.filter(v => v.channelId === 'A') }), ['later']);
+});
+
+test('formatViewers and formatScheduled word a live and a premiere', () => {
+    assert.equal(formatViewers(1234), '1,2 k spectateurs');
+    assert.equal(formatViewers(1), '1 spectateur');
+    assert.equal(formatViewers(undefined), 'En direct');
+
+    const now = new Date(2026, 9, 2, 15, 0).getTime();
+    assert.equal(formatScheduled(new Date(2026, 9, 2, 18, 0).toISOString(), now), 'Prévue aujourd\'hui à 18:00');
+    assert.equal(formatScheduled(new Date(2026, 9, 3, 9, 30).toISOString(), now), 'Prévue demain à 09:30');
+    assert.equal(formatScheduled(new Date(2026, 9, 12, 20, 0).toISOString(), now), 'Prévue le 12 oct. à 20:00');
+    assert.equal(formatScheduled('pas une date', now), 'Prochainement');
 });

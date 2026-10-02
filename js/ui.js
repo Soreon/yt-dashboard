@@ -1,6 +1,6 @@
 // DOM rendering helpers
 
-import { formatDuration, formatViews, getRelativeTime, isValidYouTubeId } from './feed.js';
+import { formatDuration, formatScheduled, formatViewers, formatViews, getRelativeTime, isValidYouTubeId } from './feed.js';
 import { FAVORITES_GROUP } from './groups-model.js';
 
 // Star next to the name of the favorites group (chip, card)
@@ -383,10 +383,23 @@ function createVideoCard(video, channelAvatar) {
         ? `<a class="${className}" href="${url}" target="_blank" rel="noopener noreferrer" ${extra}>${content}</a>`
         : `<span class="${className}">${content}</span>`;
 
+    // Badge on the thumbnail: duration, or live / premiere to come (a scheduled live has no duration)
     const duration = formatDuration(video.duration);
+    let badge = duration && `<span class="duration-badge">${duration}</span>`;
+    if (video.live === 'live') {
+        badge = '<span class="duration-badge status-badge live-badge">En direct</span>';
+    } else if (video.live === 'upcoming') {
+        badge = `<span class="duration-badge status-badge">${duration ? 'Première' : 'À venir'}</span>`;
+    }
+
     // [class, text]: the list layout shows each one in its own column
-    const stats = [['video-views', formatViews(video.views)], ['video-age', publishedAt && getRelativeTime(publishedAt)]]
-        .filter(([, text]) => text);
+    let stats = [['video-views', formatViews(video.views)], ['video-age', publishedAt && getRelativeTime(publishedAt)]];
+    if (video.live === 'live') {
+        stats = [['video-status', formatViewers(video.viewers)]];
+    } else if (video.live === 'upcoming') {
+        stats = [['video-status', formatScheduled(video.scheduledAt)]];
+    }
+    stats = stats.filter(([, text]) => text);
 
     const card = document.createElement('div');
     card.className = 'video-card';
@@ -395,7 +408,7 @@ function createVideoCard(video, channelAvatar) {
     card.innerHTML = `
         ${link(videoUrl, 'thumbnail', `
             <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
-            ${duration ? `<span class="duration-badge">${duration}</span>` : ''}
+            ${badge || ''}
         `, 'tabindex="-1" aria-hidden="true"')}
         <div class="details">
             ${link(channelUrl, 'channel-avatar', '<span class="avatar"></span>', 'tabindex="-1" aria-hidden="true"')}
