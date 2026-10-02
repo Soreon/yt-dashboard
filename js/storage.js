@@ -1,5 +1,7 @@
 // Persistence in localStorage
 
+import { withFavorites } from './groups-model.js';
+
 const AUTH_KEY = 'yt_auth_token';
 const PLAYLISTS_KEY = 'yt_playlist_cache';
 const VIDEOS_KEY = 'yt_video_cache';
@@ -94,9 +96,9 @@ export function saveLastSync(timestamp) {
     return writeJSON(LAST_SYNC_KEY, timestamp);
 }
 
-// { group name: [channelId, ...] }
+// { group name: [channelId, ...] }, always starting with the favorites
 export function getUserGroups() {
-    return readJSON(GROUPS_KEY, {});
+    return withFavorites(readJSON(GROUPS_KEY, {}));
 }
 
 export function saveUserGroups(groups) {

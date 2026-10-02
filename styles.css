@@ -501,6 +501,19 @@ body.guide-collapsed .page {
     height: 18px;
 }
 
+/* Favorites group: a star before its name */
+.favorites-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.favorites-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 8px;
+}
+
 /* List / grid toggle, like Google Drive's segmented button: the current side is filled and checked */
 .layout-toggle {
     display: flex;
@@ -1147,6 +1160,11 @@ body.guide-collapsed .page {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.group-card-title .favorites-icon {
+    margin-right: 4px;
+    vertical-align: -3px;
 }
 
 .group-meta {

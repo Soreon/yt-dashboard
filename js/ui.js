@@ -1,6 +1,10 @@
 // DOM rendering helpers
 
 import { formatDuration, formatViews, getRelativeTime, isValidYouTubeId } from './feed.js';
+import { FAVORITES_GROUP } from './groups-model.js';
+
+// Star next to the name of the favorites group (chip, card)
+export const FAVORITES_ICON = '<svg class="favorites-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
 
 // Escape HTML to prevent XSS, in text and in quoted attribute values
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' };
@@ -356,6 +360,10 @@ export function renderFilterButtons({ groupNames, activeGroup, activeChannel, on
         const active = !activeChannel && groupName === activeGroup;
         button.className = active ? 'chip filter-button active' : 'chip filter-button';
         button.textContent = label;
+        if (groupName === FAVORITES_GROUP) {
+            button.classList.add('favorites-chip');
+            button.insertAdjacentHTML('afterbegin', FAVORITES_ICON);
+        }
         button.onclick = () => onSelectGroup(groupName);
         filterContainer.appendChild(button);
     });

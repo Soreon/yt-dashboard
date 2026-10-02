@@ -5,6 +5,14 @@ import { isValidYouTubeId } from './feed.js';
 const EXPORT_FORMAT = 'global-video-feed-groups';
 const MAX_GROUP_NAME_LENGTH = 60; // Same limit as the name field of the editor
 
+// Built-in group: always there and first, it cannot be renamed, deleted or moved
+export const FAVORITES_GROUP = 'Favoris';
+
+// Copy of the groups with the favorites first (empty if they were missing)
+export function withFavorites(groups) {
+    return { [FAVORITES_GROUP]: groups[FAVORITES_GROUP] || [], ...groups };
+}
+
 // Create a group, or update one (originalName set), keeping the groups order.
 // Returns { groups } with a new object, or { error } with a message for the user
 export function upsertGroup(groups, { originalName = null, name, channelIds }) {
@@ -12,6 +20,10 @@ export function upsertGroup(groups, { originalName = null, name, channelIds }) {
 
     if (!groupName) {
         return { error: 'Veuillez entrer un nom de groupe' };
+    }
+
+    if (originalName === FAVORITES_GROUP && groupName !== FAVORITES_GROUP) {
+        return { error: `Le groupe « ${FAVORITES_GROUP} » ne peut pas être renommé` };
     }
 
     if (groupName !== originalName && Object.hasOwn(groups, groupName)) {
@@ -30,18 +42,29 @@ export function upsertGroup(groups, { originalName = null, name, channelIds }) {
     };
 }
 
-// Copy of the groups without the given one
+// Copy of the groups without the given one (the favorites stay)
 export function removeGroup(groups, name) {
+    if (name === FAVORITES_GROUP) return groups;
     return Object.fromEntries(Object.entries(groups).filter(([groupName]) => groupName !== name));
+}
+
+// Whether a group can move up (offset -1) or down (+1) among the filters: not past either end,
+// and the favorites stay first
+export function canMoveGroup(groups, name, offset) {
+    const names = Object.keys(groups);
+    const index = names.indexOf(name);
+    const target = index + offset;
+    return index !== -1 && target >= 0 && target < names.length
+        && name !== FAVORITES_GROUP && names[target] !== FAVORITES_GROUP;
 }
 
 // Copy of the groups with one moved up (offset -1) or down (+1) among the filters
 export function moveGroup(groups, name, offset) {
+    if (!canMoveGroup(groups, name, offset)) return groups;
+
     const entries = Object.entries(groups);
     const index = entries.findIndex(([groupName]) => groupName === name);
     const target = index + offset;
-    if (index === -1 || target < 0 || target >= entries.length) return groups;
-
     [entries[index], entries[target]] = [entries[target], entries[index]];
     return Object.fromEntries(entries);
 }

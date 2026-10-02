@@ -2,16 +2,16 @@
 
 import { getRelativeTime, isValidYouTubeId, normalizeText } from './feed.js';
 import {
-    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels, isInactive,
-    mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup,
-    ungroupedChannels, upsertGroup
+    addToGroup, canMoveGroup, channelActivity, exportGroups, FAVORITES_GROUP, groupActivity, groupsOfChannel,
+    inactiveChannels, isInactive, mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup,
+    renameGroup, ungroupedChannels, upsertGroup
 } from './groups-model.js';
 import { watchedLookup } from './history-model.js';
 import {
     getChannelAvatars, getChannelNames, getHiddenGroups, getUserGroups, getVideoCache, getWatchHistory,
     getWatchedIds, saveHiddenGroups, saveUserGroups
 } from './storage.js';
-import { downloadJson, setAvatar, showError, showToast } from './ui.js';
+import { downloadJson, FAVORITES_ICON, setAvatar, showError, showToast } from './ui.js';
 
 const ICON_MORE = 'M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z';
 const UNGROUPED = Symbol('ungrouped');
@@ -145,17 +145,13 @@ function renderOverview() {
     const history = watchedLookup(getWatchHistory(), getWatchedIds());
     const entries = Object.entries(groups);
 
-    $('export-groups').disabled = entries.length === 0;
+    // Groups without channels are not exported: nothing to export until one has some
+    $('export-groups').disabled = entries.every(([, ids]) => ids.length === 0);
     $('ungrouped-count').textContent = ungroupedChannels(groups, subscribedChannelIds()).length;
     $('inactive-count').textContent = inactiveChannels(subscribedChannelIds(), videoCache).length;
 
     const grid = $('groups-grid');
     grid.innerHTML = '';
-
-    if (entries.length === 0) {
-        grid.innerHTML = '<div class="no-videos">Aucun groupe pour l\'instant. Créez-en un pour filtrer le fil par thème, ou importez un fichier de groupes.</div>';
-        return;
-    }
 
     // A group matches the search by its name or by one of its channels
     const shown = entries.filter(([name, ids]) => matches(name) || ids.some(id => matches(channelNames[id] || '')));
@@ -165,7 +161,6 @@ function renderOverview() {
     }
 
     const hiddenGroups = getHiddenGroups();
-    const names = entries.map(([name]) => name);
 
     shown.forEach(([name, channelIds]) => {
         const { lastUpload, unwatched } = groupActivity(channelIds, videoCache, history);
@@ -194,6 +189,7 @@ function renderOverview() {
         const title = document.createElement('h3');
         title.className = 'group-card-title';
         title.textContent = name;
+        if (name === FAVORITES_GROUP) title.insertAdjacentHTML('afterbegin', FAVORITES_ICON);
 
         const meta = document.createElement('p');
         meta.className = 'group-meta';
@@ -207,13 +203,13 @@ function renderOverview() {
         ].filter(Boolean).join(' · ');
 
         card.append(mosaic, title, meta, activity);
-        wrap.append(card, createCardMenu(name, names.indexOf(name), names.length, hidden));
+        wrap.append(card, createCardMenu(name, groups, hidden));
         grid.appendChild(wrap);
     });
 }
 
-// Card menu: move the group among the filters, hide it from the feed
-function createCardMenu(name, index, count, hidden) {
+// Card menu: move the group among the filters (the favorites stay first), hide it from the feed
+function createCardMenu(name, groups, hidden) {
     const details = document.createElement('details');
     details.className = 'row-menu card-menu';
 
@@ -226,9 +222,9 @@ function createCardMenu(name, index, count, hidden) {
     menu.className = 'menu row-menu-items';
 
     const up = menuItem('Monter', () => reorderGroup(name, -1));
-    up.disabled = index === 0;
+    up.disabled = !canMoveGroup(groups, name, -1);
     const down = menuItem('Descendre', () => reorderGroup(name, 1));
-    down.disabled = index === count - 1;
+    down.disabled = !canMoveGroup(groups, name, 1);
     menu.append(up, down, menuItem(hidden ? 'Afficher dans le fil' : 'Masquer dans le fil', () => toggleHidden(name)));
 
     details.append(summary, menu);
@@ -275,6 +271,8 @@ function renderChannelsView(target) {
 
     $('group-title').textContent = ungrouped ? 'Sans groupe' : inactive ? 'Inactives depuis plus d\'un an' : target;
     $('group-actions').hidden = ungrouped || inactive;
+    $('rename-group').hidden = target === FAVORITES_GROUP;
+    $('delete-group').hidden = target === FAVORITES_GROUP;
     const notArchived = inactive ? inactiveChannelsToArchive(groups) : [];
     $('inactive-actions').hidden = !inactive || notArchived.length === 0;
 
@@ -309,6 +307,8 @@ function renderChannelsView(target) {
             ? 'Toutes vos chaînes sont dans au moins un groupe.'
             : inactive
             ? 'Aucune chaîne inactive : toutes ont publié une vidéo depuis un an.'
+            : target === FAVORITES_GROUP
+            ? 'Aucune chaîne favorite pour l\'instant. Ajoutez-en ici, ou depuis le menu d\'une chaîne (Ajouter à › Favoris).'
             : 'Ce groupe est vide. Ajoutez-lui des chaînes pour le voir dans le fil.'}</div>`;
         return;
     }

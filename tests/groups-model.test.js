@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-    addToGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels, isInactive,
-    mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup,
-    ungroupedChannels, upsertGroup
+    addToGroup, canMoveGroup, channelActivity, exportGroups, groupActivity, groupsOfChannel, inactiveChannels,
+    isInactive, mergeGroups, moveGroup, moveToGroup, parseGroupsFile, removeFromGroup, removeGroup, renameGroup,
+    ungroupedChannels, upsertGroup, withFavorites
 } from '../js/groups-model.js';
 
 const groups = { Tech: ['A', 'B'], Musique: ['C'], Jeux: ['D'] };
@@ -76,6 +76,28 @@ test('moveGroup swaps a group with its neighbour, and ignores impossible moves',
     assert.equal(moveGroup(groups, 'Tech', -1), groups);
     assert.equal(moveGroup(groups, 'Jeux', 1), groups);
     assert.equal(moveGroup(groups, 'Inconnu', 1), groups);
+});
+
+test('withFavorites puts the favorites first, empty if they were missing', () => {
+    assert.deepEqual(Object.entries(withFavorites(groups)), [['Favoris', []], ['Tech', ['A', 'B']], ['Musique', ['C']], ['Jeux', ['D']]]);
+    assert.deepEqual(Object.entries(withFavorites({ Tech: ['A'], Favoris: ['B'] })), [['Favoris', ['B']], ['Tech', ['A']]]);
+    assert.deepEqual(withFavorites({}), { Favoris: [] });
+    assert.equal(groups.Favoris, undefined, 'the original groups are not modified');
+});
+
+test('the favorites cannot be renamed, deleted or moved, and no group goes above them', () => {
+    const withFav = withFavorites(groups);
+    assert.match(renameGroup(withFav, 'Favoris', 'Préférées').error, /ne peut pas être renommé/);
+    assert.deepEqual(upsertGroup(withFav, { originalName: 'Favoris', name: 'Favoris', channelIds: ['A'] }).groups.Favoris, ['A']);
+    assert.match(upsertGroup(withFav, { name: 'Favoris', channelIds: [] }).error, /existe déjà/);
+    assert.equal(removeGroup(withFav, 'Favoris'), withFav);
+
+    assert.equal(canMoveGroup(withFav, 'Favoris', 1), false);
+    assert.equal(canMoveGroup(withFav, 'Tech', -1), false);
+    assert.equal(canMoveGroup(withFav, 'Musique', -1), true);
+    assert.equal(moveGroup(withFav, 'Favoris', 1), withFav);
+    assert.equal(moveGroup(withFav, 'Tech', -1), withFav);
+    assert.deepEqual(Object.keys(moveGroup(withFav, 'Musique', -1)), ['Favoris', 'Musique', 'Tech', 'Jeux']);
 });
 
 test('parseGroupsFile skips invalid groups and channels, and trims names', () => {

@@ -341,6 +341,8 @@ function renderVideoFeed() {
     let emptyMessage;
     if (searchQuery.trim()) {
         emptyMessage = `Aucune vidéo ne correspond à « ${searchQuery.trim()} ».`;
+    } else if (channelIds?.length === 0) {
+        emptyMessage = `Le groupe « ${activeGroup} » ne contient aucune chaîne. Ajoutez-en depuis la page Groupes.`;
     } else if (groupVideos.length > 0) {
         emptyMessage = 'Vous êtes à jour : toutes les vidéos de ce fil ont été vues.';
     } else if (accessToken) {

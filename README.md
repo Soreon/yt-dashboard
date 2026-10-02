@@ -7,7 +7,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 - **Connexion Google** via Google Identity Services (OAuth 2.0, *token model*) : aucun secret côté serveur.
 - **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts, en grille de cartes ou en liste compacte (bouton en haut à droite, comme dans Google Drive).
 - **Synchronisation** : au chargement, puis automatiquement tant que l'onglet est ouvert (au plus toutes les 30 minutes), ou à la demande.
-- **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe. Une page dédiée montre chaque groupe (chaînes, vidéos non vues, dernière vidéo), les chaînes sans groupe, et permet d'ajouter une chaîne à plusieurs groupes.
+- **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe. Le groupe **Favoris**, toujours présent et en tête des filtres, ne peut être ni supprimé ni renommé. Une page dédiée montre chaque groupe (chaînes, vidéos non vues, dernière vidéo), les chaînes sans groupe, et permet d'ajouter une chaîne à plusieurs groupes.
 - **Vidéos vues** : une vidéo ouverte depuis le fil, ou marquée comme vue, n'y apparaît plus.
 - **Historique** des vidéos vues, regroupées par jour, avec recherche, et import de votre historique YouTube (Google Takeout).
 - **Recherche** dans le fil, par titre ou nom de chaîne.
@@ -131,7 +131,7 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_channel_avatars` | ID de chaîne → URL de son avatar |
 | `yt_video_cache` | ID de chaîne → dernières vidéos (ID, titre, chaîne, date, miniature, durée, vues) |
 | `yt_last_sync` | Date de la dernière synchronisation réussie |
-| `yt_user_groups` | Nom du groupe → liste d'ID de chaînes (l'ordre est celui des filtres) |
+| `yt_user_groups` | Nom du groupe → liste d'ID de chaînes (l'ordre est celui des filtres, « Favoris » toujours en premier) |
 | `yt_hidden_groups` | Noms des groupes masqués dans les filtres du fil |
 | `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
 | `yt_guide_collapsed` | Menu latéral réduit ou non |

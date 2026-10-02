@@ -26,14 +26,14 @@ test('the groups page shows one card per group, and opens a group', async ({ pag
     await page.locator('.guide .nav-link', { hasText: 'Groupes' }).click();
     await expect(page).toHaveURL(/#groupes$/);
     await expect(page.locator('#feed-view')).toBeHidden();
-    await expect(cards(page)).toHaveCount(2);
-    await expect(cards(page).first()).toContainText('Tech');
-    await expect(cards(page).first()).toContainText('2 chaînes');
-    await expect(cards(page).first()).toContainText('non vues');
-    await expect(cards(page).first().locator('.group-mosaic .avatar')).toHaveCount(2);
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Favoris', 'Tech', 'Musique']);
+    const tech = cards(page).nth(1);
+    await expect(tech).toContainText('2 chaînes');
+    await expect(tech).toContainText('non vues');
+    await expect(tech.locator('.group-mosaic .avatar')).toHaveCount(2);
     await expect(page.locator('#ungrouped-count')).toHaveText('0');
 
-    await cards(page).first().click();
+    await tech.click();
     await expect(page).toHaveURL(/#groupe\/Tech$/);
     await expect(page.locator('#group-title')).toHaveText('Tech');
     await expect(page.locator('#group-meta')).toContainText('2 chaînes');
@@ -46,7 +46,7 @@ test('the groups page shows one card per group, and opens a group', async ({ pag
 
 test('creates a group, adds channels to it, renames it and deletes it', async ({ page }) => {
     await openApp(page, signedIn(), '/#groupes');
-    await expect(page.locator('#groups-grid')).toContainText('Aucun groupe');
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Favoris']);
     await expect(page.locator('#export-groups')).toBeDisabled();
     await expect(page.locator('#ungrouped-count')).toHaveText('3');
 
@@ -68,8 +68,8 @@ test('creates a group, adds channels to it, renames it and deletes it', async ({
 
     await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne B', 'Chaîne C']);
     await expect(page.locator('#add-panel')).toBeHidden();
-    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Tech: ['UC_B', 'UC_C'] });
-    await expect(chips(page)).toHaveText(['Tous', 'Tech']);
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Favoris: [], Tech: ['UC_B', 'UC_C'] });
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech']);
 
     // A second group with the same name is refused
     await page.locator('.back-link').click();
@@ -81,18 +81,18 @@ test('creates a group, adds channels to it, renames it and deletes it', async ({
     await page.locator('#cancel-new-group').click();
 
     // Rename, then delete
-    await cards(page).first().click();
+    await cards(page).filter({ hasText: 'Tech' }).click();
     await page.locator('#rename-group').click();
     await page.locator('#rename-input').fill('Techno');
     await page.locator('#rename-form button[type="submit"]').click();
     await expect(page).toHaveURL(/#groupe\/Techno$/);
     await expect(page.locator('#group-title')).toHaveText('Techno');
-    expect(Object.keys(await readStorage(page, 'yt_user_groups'))).toEqual(['Techno']);
+    expect(Object.keys(await readStorage(page, 'yt_user_groups'))).toEqual(['Favoris', 'Techno']);
 
     await page.locator('#delete-group').click();
     await expect(page).toHaveURL(/#groupes$/);
-    await expect(page.locator('#groups-grid')).toContainText('Aucun groupe');
-    expect(await readStorage(page, 'yt_user_groups')).toEqual({});
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Favoris']);
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Favoris: [] });
 });
 
 test('a channel can be in several groups, added from the "Sans groupe" page or a row menu', async ({ page }) => {
@@ -106,7 +106,7 @@ test('a channel can be in several groups, added from the "Sans groupe" page or a
     await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne B']);
 
     const menu = await openRowMenu(page, 'Chaîne B');
-    await expect(menu.locator('.menu-item')).toHaveText(['Voir ses vidéos dans le fil', 'Tech', 'Musique']);
+    await expect(menu.locator('.menu-item')).toHaveText(['Voir ses vidéos dans le fil', 'Favoris', 'Tech', 'Musique']);
     await menu.locator('.menu-item', { hasText: 'Tech' }).click();
     await expect(rows(page)).toHaveCount(0);
     await expect(page.locator('#group-channels')).toContainText('Toutes vos chaînes sont dans au moins un groupe');
@@ -114,16 +114,16 @@ test('a channel can be in several groups, added from the "Sans groupe" page or a
     // In Tech, add Chaîne B to Musique too: it shows Musique as its other group
     await page.goto('/#groupe/Tech');
     const menuB = await openRowMenu(page, 'Chaîne B');
-    await expect(menuB.locator('.menu-item')).toHaveText(['Voir ses vidéos dans le fil', 'Musique', 'Retirer de « Tech »']);
+    await expect(menuB.locator('.menu-item')).toHaveText(['Voir ses vidéos dans le fil', 'Favoris', 'Musique', 'Retirer de « Tech »']);
     await menuB.locator('.menu-item', { hasText: 'Musique' }).click();
     await expect(rowOf(page, 'Chaîne B').locator('.mini-chip')).toHaveText(['Musique']);
-    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Tech: ['UC_A', 'UC_B'], Musique: ['UC_C', 'UC_B'] });
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Favoris: [], Tech: ['UC_A', 'UC_B'], Musique: ['UC_C', 'UC_B'] });
 
     // Remove it from Tech: it stays in Musique
     const menuAgain = await openRowMenu(page, 'Chaîne B');
     await menuAgain.locator('.menu-item', { hasText: 'Retirer de' }).click();
     await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne A']);
-    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Tech: ['UC_A'], Musique: ['UC_C', 'UC_B'] });
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Favoris: [], Tech: ['UC_A'], Musique: ['UC_C', 'UC_B'] });
 });
 
 test('"Voir le fil" shows the feed filtered on the group', async ({ page }) => {
@@ -161,6 +161,7 @@ test('exports the groups to a file that imports them back on another device', as
     expect(download.suggestedFilename()).toMatch(/^groupes-global-video-feed-\d{4}-\d{2}-\d{2}\.json$/);
     const file = JSON.parse(await (await download.createReadStream()).toArray().then(chunks => Buffer.concat(chunks).toString('utf8')));
     expect(file.groups).toEqual([
+        { name: 'Favoris', channels: [] },
         { name: 'Tech', channels: [{ id: 'UC_A', name: 'Chaîne A' }, { id: 'UC_B', name: 'Chaîne B' }] },
         { name: 'Musique', channels: [{ id: 'UC_C', name: 'Chaîne C' }] }
     ]);
@@ -176,9 +177,9 @@ test('exports the groups to a file that imports them back on another device', as
 
     await upload(JSON.stringify(file));
     await expect(otherPage.locator('#error-message')).toHaveText('Import terminé : 1 groupe ajouté, 1 groupe complété.');
-    expect(await readStorage(otherPage, 'yt_user_groups')).toEqual({ Musique: ['UC_X', 'UC_C'], Tech: ['UC_A', 'UC_B'] });
-    await expect(cards(otherPage)).toHaveCount(2);
-    await expect(chips(otherPage)).toHaveText(['Tous', 'Musique', 'Tech']);
+    expect(await readStorage(otherPage, 'yt_user_groups')).toEqual({ Favoris: [], Musique: ['UC_X', 'UC_C'], Tech: ['UC_A', 'UC_B'] });
+    await expect(cards(otherPage)).toHaveCount(3);
+    await expect(chips(otherPage)).toHaveText(['Tous', 'Favoris', 'Musique', 'Tech']);
 
     await upload(JSON.stringify(file));
     await expect(otherPage.locator('#error-message')).toHaveText('Aucun nouveau groupe ni nouvelle chaîne à importer.');
@@ -208,8 +209,8 @@ test('inactive channels are flagged, listed, and moved to Archive in one click',
     await page.locator('#archive-all').click();
     await expect(page).toHaveURL(/#groupe\/Archive$/);
     await expect(rows(page).locator('.channel-row-name')).toHaveText(['Chaîne C']);
-    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Tech: ['UC_A', 'UC_B'], Musique: [], Archive: ['UC_C'] });
-    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Musique', 'Archive']);
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Favoris: [], Tech: ['UC_A', 'UC_B'], Musique: [], Archive: ['UC_C'] });
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech', 'Musique', 'Archive']);
 
     // Still inactive, but already archived: nothing left to move
     await page.goto('/#inactives');
@@ -221,23 +222,27 @@ test('inactive channels are flagged, listed, and moved to Archive in one click',
 
 test('groups can be reordered and hidden from the feed filters', async ({ page }) => {
     await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A'], Musique: ['UC_B'], Archive: ['UC_C'] } }, '/#groupes');
-    await expect(cards(page).locator('.group-card-title')).toHaveText(['Tech', 'Musique', 'Archive']);
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Favoris', 'Tech', 'Musique', 'Archive']);
 
-    // Archive goes up once, Tech cannot go up
+    // Archive goes up once; the favorites cannot move, and Tech cannot go above them
     const cardMenu = name => page.locator('.group-card-wrap', { has: page.locator('.group-card-title', { hasText: name }) }).locator('.card-menu');
+    await cardMenu('Favoris').locator('summary').click();
+    await expect(cardMenu('Favoris').locator('.menu-item', { hasText: 'Monter' })).toBeDisabled();
+    await expect(cardMenu('Favoris').locator('.menu-item', { hasText: 'Descendre' })).toBeDisabled();
+    await page.keyboard.press('Escape');
     await cardMenu('Tech').locator('summary').click();
     await expect(cardMenu('Tech').locator('.menu-item', { hasText: 'Monter' })).toBeDisabled();
     await page.keyboard.press('Escape');
     await cardMenu('Archive').locator('summary').click();
     await cardMenu('Archive').locator('.menu-item', { hasText: 'Monter' }).click();
-    await expect(cards(page).locator('.group-card-title')).toHaveText(['Tech', 'Archive', 'Musique']);
-    expect(Object.keys(await readStorage(page, 'yt_user_groups'))).toEqual(['Tech', 'Archive', 'Musique']);
-    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Archive', 'Musique']);
+    await expect(cards(page).locator('.group-card-title')).toHaveText(['Favoris', 'Tech', 'Archive', 'Musique']);
+    expect(Object.keys(await readStorage(page, 'yt_user_groups'))).toEqual(['Favoris', 'Tech', 'Archive', 'Musique']);
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech', 'Archive', 'Musique']);
 
     // Hide Archive: no chip, but the group and its page stay
     await cardMenu('Archive').locator('summary').click();
     await cardMenu('Archive').locator('.menu-item', { hasText: 'Masquer dans le fil' }).click();
-    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Musique']);
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech', 'Musique']);
     await expect(cardMenu('Archive').locator('..')).toContainText('masqué du fil');
     expect(await readStorage(page, 'yt_hidden_groups')).toEqual(['Archive']);
     await page.goto('/#groupe/Archive');
@@ -247,12 +252,49 @@ test('groups can be reordered and hidden from the feed filters', async ({ page }
     await page.locator('#rename-group').click();
     await page.locator('#rename-input').fill('Vieux');
     await page.locator('#rename-form button[type="submit"]').click();
-    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Musique']);
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech', 'Musique']);
     expect(await readStorage(page, 'yt_hidden_groups')).toEqual(['Vieux']);
     await page.goto('/#groupes');
     await cardMenu('Vieux').locator('summary').click();
     await cardMenu('Vieux').locator('.menu-item', { hasText: 'Afficher dans le fil' }).click();
-    await expect(chips(page)).toHaveText(['Tous', 'Tech', 'Vieux', 'Musique']);
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech', 'Vieux', 'Musique']);
+});
+
+test('the favorites group is always there, first, and cannot be renamed or deleted', async ({ page }) => {
+    await openApp(page, { ...signedIn(), yt_user_groups: { Tech: ['UC_A', 'UC_B'] } });
+    await expect(chips(page)).toHaveText(['Tous', 'Favoris', 'Tech']);
+    await expect(chips(page).nth(1).locator('.favorites-icon')).toHaveCount(1);
+
+    // Empty for now: the feed says how to fill it
+    await chips(page).nth(1).click();
+    await expect(page.locator('.no-videos')).toHaveText('Le groupe « Favoris » ne contient aucune chaîne. Ajoutez-en depuis la page Groupes.');
+
+    await page.goto('/#groupe/Favoris');
+    await expect(page.locator('#group-title')).toHaveText('Favoris');
+    await expect(page.locator('#group-channels')).toContainText('Aucune chaîne favorite');
+    await expect(page.locator('#add-channels')).toBeVisible();
+    await expect(page.locator('#rename-group')).toBeHidden();
+    await expect(page.locator('#delete-group')).toBeHidden();
+
+    // A channel joins the favorites from its menu in another group
+    await page.goto('/#groupe/Tech');
+    await expect(page.locator('#rename-group')).toBeVisible();
+    const menu = await openRowMenu(page, 'Chaîne B');
+    await menu.locator('.menu-item', { hasText: 'Favoris' }).click();
+    await expect(rowOf(page, 'Chaîne B').locator('.mini-chip')).toHaveText(['Favoris']);
+    expect(await readStorage(page, 'yt_user_groups')).toEqual({ Favoris: ['UC_B'], Tech: ['UC_A', 'UC_B'] });
+
+    await page.goto('/#groupe/Favoris');
+    await page.locator('#show-group-feed').click();
+    await expect(page.locator('.filter-button.active')).toHaveText('Favoris');
+    await expect(feedCards(page).locator('.channel-name')).toHaveText(Array(5).fill('Chaîne B'));
+
+    // No other group may take its name
+    await page.goto('/#groupe/Tech');
+    await page.locator('#rename-group').click();
+    await page.locator('#rename-input').fill('Favoris');
+    await page.locator('#rename-form button[type="submit"]').click();
+    await expect(page.locator('#error-message')).toHaveText('Un groupe nommé « Favoris » existe déjà');
 });
 
 test('the feed can be filtered on one channel from the groups page', async ({ page }) => {
