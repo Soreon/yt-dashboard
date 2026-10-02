@@ -1100,7 +1100,8 @@ body.guide-collapsed .page {
     min-width: 0;
 }
 
-.card-menu {
+/* Over the top right corner of the mosaic (both classes: .row-menu, further down, is relative) */
+.row-menu.card-menu {
     position: absolute;
     top: 4px;
     right: 4px;
@@ -1632,6 +1633,12 @@ a.channel-row-name:hover {
 
     .row-menu-items {
         right: 0;
+    }
+
+    /* Within the card, even in the left column */
+    .card-menu .row-menu-items {
+        min-width: 0;
+        width: max-content;
     }
 
     .page-title {
