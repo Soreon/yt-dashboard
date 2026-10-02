@@ -86,6 +86,26 @@ test('a used up quota keeps what came, says when the videos come back, and waits
     expect(youtube.calls.length).toBe(calls);
 });
 
+test('a channel silent for a year is read once a week, the others at every sync', async ({ page, youtube }) => {
+    youtube.inactive.add('UC_C');
+    await openApp(page, signedIn());
+    await expect(feedCards(page)).toHaveCount(15);
+    await waitForSync(page);
+    const reads = channel => youtube.calls.filter(call => call.endpoint === 'playlistItems' && call.params.playlistId.endsWith(channel)).length;
+    expect([reads('_A'), reads('_B'), reads('_C')]).toEqual([1, 1, 1]);
+
+    await page.locator('#force-sync-button').click();
+    await waitForSync(page);
+    expect([reads('_A'), reads('_B'), reads('_C')]).toEqual([2, 2, 1]);
+
+    // A week later, it is read again
+    const fetchedAt = await readStorage(page, 'yt_channel_fetched_at');
+    await writeStorage(page, 'yt_channel_fetched_at', { ...fetchedAt, UC_C: Date.now() - 8 * 24 * HOUR });
+    await page.locator('#force-sync-button').click();
+    await waitForSync(page);
+    expect([reads('_A'), reads('_B'), reads('_C')]).toEqual([3, 3, 2]);
+});
+
 test('Shorts are left out, with a fallback when a long-form playlist is missing', async ({ page, youtube }) => {
     youtube.noLongForm.add('UC_C');
     await openApp(page, signedIn());

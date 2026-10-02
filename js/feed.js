@@ -134,6 +134,30 @@ export function matchesSearch(video, query) {
     return normalizeText(query).split(/\s+/).filter(Boolean).every(word => haystack.includes(word));
 }
 
+const HOUR_MS = 3600 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+// How long a channel may wait between two reads, from the age of its latest known video: a
+// channel that publishes often is read at every sync, one silent for a year once a week
+export const CHANNEL_SYNC_TIERS = [
+    { youngerThan: 14 * DAY_MS, every: 0 },
+    { youngerThan: 60 * DAY_MS, every: 6 * HOUR_MS },
+    { youngerThan: 365 * DAY_MS, every: DAY_MS },
+    { youngerThan: Infinity, every: 7 * DAY_MS }
+];
+
+// Wait between two reads of a channel, from its cached videos (never read: at every sync)
+export function channelSyncInterval(channelVideos, now = Date.now()) {
+    const latest = Math.max(...(channelVideos || []).map(video => Date.parse(video.publishedAt)).filter(Number.isFinite));
+    if (!Number.isFinite(latest)) return 0;
+    return CHANNEL_SYNC_TIERS.find(tier => now - latest < tier.youngerThan).every;
+}
+
+// Channels to read in this sync: those whose wait since their last read ({ channelId: time }) is over
+export function channelsDue(channelIds, videoCache, fetchedAt, now = Date.now()) {
+    return channelIds.filter(id => now - (fetchedAt[id] || 0) >= channelSyncInterval(videoCache[id], now));
+}
+
 // Next renewal of the daily YouTube quota: midnight, Pacific time (timestamp)
 export function nextQuotaReset(now = Date.now()) {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {

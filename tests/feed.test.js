@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { MAX_VIDEOS_PER_CHANNEL } from '../js/config.js';
 import {
-    applyVideoDetails, buildFeed, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
+    applyVideoDetails, buildFeed, channelsDue, channelSyncInterval, formatDuration, formatViews, getRelativeTime, isValidYouTubeId, keepChannels,
     longFormPlaylistId, matchesSearch, mergeChannelVideos, nextQuotaReset, normalizeText, parseIsoDuration,
     quotaResetText, toCachedVideo, videosMissingDetails
 } from '../js/feed.js';
@@ -210,4 +210,31 @@ test('quotaResetText gives the time, and says tomorrow when it is', () => {
     const reset = new Date(2026, 9, 3, 9, 0).getTime();
     assert.equal(quotaResetText(reset, new Date(2026, 9, 3, 2, 0).getTime()), 'à partir de 09:00');
     assert.equal(quotaResetText(reset, new Date(2026, 9, 2, 22, 0).getTime()), 'demain à partir de 09:00');
+});
+
+test('channelSyncInterval reads often the channels that publish often', () => {
+    const now = Date.UTC(2026, 9, 2);
+    const day = 24 * 3600 * 1000;
+    const videos = (...ages) => ages.map(age => ({ publishedAt: new Date(now - age * day).toISOString() }));
+
+    assert.equal(channelSyncInterval(undefined, now), 0, 'never read');
+    assert.equal(channelSyncInterval([], now), 0);
+    assert.equal(channelSyncInterval(videos(300, 3), now), 0, 'the latest video counts');
+    assert.equal(channelSyncInterval(videos(20), now), 6 * 3600 * 1000);
+    assert.equal(channelSyncInterval(videos(200), now), day);
+    assert.equal(channelSyncInterval(videos(400), now), 7 * day);
+    assert.equal(channelSyncInterval([{ publishedAt: 'pas une date' }], now), 0);
+});
+
+test('channelsDue keeps the channels whose wait is over', () => {
+    const now = Date.UTC(2026, 9, 2);
+    const day = 24 * 3600 * 1000;
+    const cache = {
+        UC_ACTIVE: [{ publishedAt: new Date(now - day).toISOString() }],
+        UC_SLOW: [{ publishedAt: new Date(now - 200 * day).toISOString() }],
+        UC_OLD: [{ publishedAt: new Date(now - 400 * day).toISOString() }]
+    };
+    const fetchedAt = { UC_ACTIVE: now - 60 * 1000, UC_SLOW: now - 2 * day, UC_OLD: now - 3 * day };
+
+    assert.deepEqual(channelsDue(['UC_ACTIVE', 'UC_SLOW', 'UC_OLD', 'UC_NEW'], cache, fetchedAt, now), ['UC_ACTIVE', 'UC_SLOW', 'UC_NEW']);
 });

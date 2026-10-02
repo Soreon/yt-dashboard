@@ -20,6 +20,7 @@ const FEED_LAYOUT_KEY = 'yt_feed_layout';
 const SYNC_STAMPS_KEY = 'yt_sync_stamps';
 const DRIVE_SYNC_KEY = 'yt_drive_sync';
 const QUOTA_RESET_KEY = 'yt_quota_reset_at';
+const CHANNEL_FETCHED_KEY = 'yt_channel_fetched_at';
 
 let onSyncedChange = () => {};
 
@@ -102,6 +103,15 @@ export function getVideoCache() {
 
 export function saveVideoCache(cache) {
     return writeJSON(VIDEOS_KEY, cache);
+}
+
+// When each channel was last read: { channelId: timestamp }
+export function getChannelFetchedAt() {
+    return readJSON(CHANNEL_FETCHED_KEY, {});
+}
+
+export function saveChannelFetchedAt(fetchedAt) {
+    return writeJSON(CHANNEL_FETCHED_KEY, fetchedAt);
 }
 
 // Until when the daily YouTube quota is used up (timestamp, 0 if it is not)
