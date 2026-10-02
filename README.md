@@ -5,7 +5,7 @@ Un fil unique des dernières vidéos de vos abonnements YouTube, trié par date,
 ## Fonctionnalités
 
 - **Connexion Google** via Google Identity Services (OAuth 2.0, *token model*) : aucun secret côté serveur.
-- **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts.
+- **Fil unifié** : les dernières vidéos de toutes vos chaînes, de la plus récente à la plus ancienne, sans les Shorts, en grille de cartes ou en liste compacte (bouton en haut à droite, comme dans Google Drive).
 - **Synchronisation** : au chargement, puis automatiquement tant que l'onglet est ouvert (au plus toutes les 30 minutes), ou à la demande.
 - **Groupes** : regroupez des chaînes (Tech, Musique…) et filtrez le fil par groupe. Une page dédiée montre chaque groupe (chaînes, vidéos non vues, dernière vidéo), les chaînes sans groupe, et permet d'ajouter une chaîne à plusieurs groupes.
 - **Vidéos vues** : une vidéo ouverte depuis le fil, ou marquée comme vue, n'y apparaît plus.
@@ -135,6 +135,7 @@ Cela suppose que GitHub Pages soit configuré pour être déployé par le workfl
 | `yt_hidden_groups` | Noms des groupes masqués dans les filtres du fil |
 | `yt_account` | Nom et avatar de votre chaîne, affichés en haut à droite |
 | `yt_guide_collapsed` | Menu latéral réduit ou non |
+| `yt_feed_layout` | Affichage du fil : grille ou liste |
 | `yt_watch_history` | Vidéos vues : date et informations de la vidéo (500 au plus, pour la page Historique) |
 | `yt_watched_ids` | Identifiants de toutes les vidéos vues ou importées, sans limite, pour les masquer du fil |
 | `yt_cache_version` | Version du format du cache (un cache plus ancien est reconstruit à la synchronisation suivante) |

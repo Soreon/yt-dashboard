@@ -270,6 +270,17 @@ export function renderHistory(dayGroups, emptyMessage, channelAvatars = {}, hand
     });
 }
 
+// Lay out the feed as a grid of cards or a compact list ('grid' or 'list'), and check the
+// matching side of the toggle. The cards are the same, only the CSS changes
+export function setFeedLayout(layout) {
+    const grid = document.getElementById('subscriptions-grid');
+    if (grid) grid.className = layout === 'list' ? 'video-list' : 'video-grid';
+
+    document.querySelectorAll('.layout-toggle-button').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.layout === layout));
+    });
+}
+
 // Show the feed, the groups or the history page, and highlight it in the navigation
 export function setActiveView(view) {
     ['feed', 'groups', 'history'].forEach(name => {
@@ -301,7 +312,9 @@ function createVideoCard(video, channelAvatar) {
         : `<span class="${className}">${content}</span>`;
 
     const duration = formatDuration(video.duration);
-    const stats = [formatViews(video.views), publishedAt && getRelativeTime(publishedAt)].filter(Boolean);
+    // [class, text]: the list layout shows each one in its own column
+    const stats = [['video-views', formatViews(video.views)], ['video-age', publishedAt && getRelativeTime(publishedAt)]]
+        .filter(([, text]) => text);
 
     const card = document.createElement('div');
     card.className = 'video-card';
@@ -317,7 +330,7 @@ function createVideoCard(video, channelAvatar) {
             <div class="meta">
                 <h3 class="video-title">${link(videoUrl, 'video-title-link', escapeHtml(title), `title="${escapeHtml(title)}"`)}</h3>
                 ${link(channelUrl, 'channel-name', escapeHtml(channelTitle))}
-                <div class="video-stats">${stats.map(text => `<span>${escapeHtml(text)}</span>`).join('')}</div>
+                <div class="video-stats">${stats.map(([className, text]) => `<span class="${className}">${escapeHtml(text)}</span>`).join('')}</div>
             </div>
         </div>
     `;

@@ -14,15 +14,15 @@ import {
 import { readZipText } from './zip.js';
 import {
     clearAccount, clearAuthData, getAccount, getAuthData, getCacheVersion, getChannelAvatars, getChannelNames,
-    getGuideCollapsed, getHiddenGroups, getLastSync, getPlaylistCache, getUserGroups, getVideoCache, getWatchHistory,
-    getWatchedIds, hasStoredSession,
-    saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveGuideCollapsed,
-    saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory, saveWatchedIds
+    getFeedLayout, getGuideCollapsed, getHiddenGroups, getLastSync, getPlaylistCache, getUserGroups, getVideoCache,
+    getWatchHistory, getWatchedIds, hasStoredSession,
+    saveAccount, saveAuthData, saveCacheVersion, saveChannelAvatars, saveChannelNames, saveFeedLayout,
+    saveGuideCollapsed, saveLastSync, savePlaylistCache, saveVideoCache, saveWatchHistory, saveWatchedIds
 } from './storage.js';
 import {
     clearUI, hideNewVideosPill, markCardWatched, renderAccount, renderFilterButtons, renderHistory, renderStats,
-    renderVideoGrid, setActiveView, setLoading, setSyncing, setupAccountMenu, showError, showNewVideosPill, showToast,
-    updateAuthUI
+    renderVideoGrid, setActiveView, setFeedLayout, setLoading, setSyncing, setupAccountMenu, showError,
+    showNewVideosPill, showToast, updateAuthUI
 } from './ui.js';
 
 const SECONDS_TO_MILLISECONDS = 1000;
@@ -615,6 +615,15 @@ function setupEventListeners() {
     document.body.classList.toggle('guide-collapsed', getGuideCollapsed());
     document.getElementById('guide-button')?.addEventListener('click', () => {
         saveGuideCollapsed(document.body.classList.toggle('guide-collapsed'));
+    });
+
+    // List / grid toggle of the feed (remembered)
+    setFeedLayout(getFeedLayout());
+    document.querySelectorAll('.layout-toggle-button').forEach(button => {
+        button.addEventListener('click', () => {
+            saveFeedLayout(button.dataset.layout);
+            setFeedLayout(button.dataset.layout);
+        });
     });
 
     // Search filters the feed as you type

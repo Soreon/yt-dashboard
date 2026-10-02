@@ -1,4 +1,7 @@
-import { cachedVideo, expect, expiredSessionWithCache, feedCards, openApp, signedIn, test } from './fixtures.js';
+import { cachedVideo, expect, expiredSessionWithCache, feedCards, openApp, readStorage, signedIn, test } from './fixtures.js';
+
+const listButton = page => page.getByRole('button', { name: 'Affichage en liste' });
+const gridButton = page => page.getByRole('button', { name: 'Affichage en grille' });
 
 test('a malicious video title cannot inject markup', async ({ page }) => {
     const storage = expiredSessionWithCache();
@@ -27,8 +30,52 @@ test('the search box filters the feed, ignoring accents and case', async ({ page
     await expect(page.locator('.no-videos')).toHaveText('Aucune vidéo ne correspond à « zzz ».');
 });
 
+test('the feed switches to a compact list, and the choice is remembered', async ({ page }) => {
+    await openApp(page, signedIn());
+    await expect(feedCards(page)).toHaveCount(15);
+    await expect(gridButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(listButton(page)).toHaveAttribute('aria-pressed', 'false');
+    const cardHeight = (await feedCards(page).first().boundingBox()).height;
+
+    await listButton(page).click();
+    await expect(page.locator('#subscriptions-grid')).toHaveClass('video-list');
+    await expect(listButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(gridButton(page)).toHaveAttribute('aria-pressed', 'false');
+    expect(await readStorage(page, 'yt_feed_layout')).toBe('list');
+
+    // One video per row, far shorter than a card
+    const first = await feedCards(page).nth(0).boundingBox();
+    const second = await feedCards(page).nth(1).boundingBox();
+    expect(second.x).toBe(first.x);
+    expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+    expect(first.height).toBeLessThan(cardHeight / 2);
+
+    await page.reload();
+    await expect(feedCards(page)).toHaveCount(15);
+    await expect(page.locator('#subscriptions-grid')).toHaveClass('video-list');
+
+    await gridButton(page).click();
+    await expect(page.locator('#subscriptions-grid')).toHaveClass('video-grid');
+    expect(await readStorage(page, 'yt_feed_layout')).toBe('grid');
+});
+
 test.describe('on a wide screen', () => {
     test.use({ viewport: { width: 1600, height: 900 } });
+
+    test('the list shows title, channel, views and date in aligned columns', async ({ page }) => {
+        await openApp(page, { ...signedIn(), yt_feed_layout: '"list"' }); // Stored as JSON
+        await expect(feedCards(page)).toHaveCount(15);
+
+        // Left edge of each column: the same on every row, in this order
+        const columns = [];
+        for (const selector of ['.video-title', '.channel-name', '.video-views', '.video-age']) {
+            const lefts = await feedCards(page).locator(selector).evaluateAll(
+                elements => elements.map(element => Math.round(element.getBoundingClientRect().left)));
+            expect(new Set(lefts).size, selector).toBe(1);
+            columns.push(lefts[0]);
+        }
+        expect(columns).toEqual([...columns].sort((a, b) => a - b));
+    });
 
     test('the menu button collapses the guide, and the choice is remembered', async ({ page }) => {
         await openApp(page, signedIn());
@@ -55,5 +102,15 @@ test.describe('on a phone', () => {
 
         await page.locator('.pivot-bar .nav-link', { hasText: 'Historique' }).tap();
         await expect(page.locator('#history-view')).toBeVisible();
+    });
+
+    test('the list fits the screen too', async ({ page }) => {
+        await openApp(page, signedIn());
+        await expect(feedCards(page)).toHaveCount(15);
+
+        await listButton(page).tap();
+        await expect(page.locator('#subscriptions-grid')).toHaveClass('video-list');
+        await expect(feedCards(page).first().locator('.video-title')).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     });
 });

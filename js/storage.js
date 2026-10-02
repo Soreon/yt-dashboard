@@ -13,6 +13,7 @@ const GUIDE_COLLAPSED_KEY = 'yt_guide_collapsed';
 const WATCH_HISTORY_KEY = 'yt_watch_history';
 const HIDDEN_GROUPS_KEY = 'yt_hidden_groups';
 const WATCHED_IDS_KEY = 'yt_watched_ids';
+const FEED_LAYOUT_KEY = 'yt_feed_layout';
 
 // Read a JSON value, or the fallback if it is missing or unreadable
 function readJSON(key, fallback) {
@@ -140,6 +141,15 @@ export function getGuideCollapsed() {
 
 export function saveGuideCollapsed(collapsed) {
     return writeJSON(GUIDE_COLLAPSED_KEY, collapsed);
+}
+
+// Feed layout: 'grid' (cards) or 'list' (compact rows)
+export function getFeedLayout() {
+    return readJSON(FEED_LAYOUT_KEY, 'grid') === 'list' ? 'list' : 'grid';
+}
+
+export function saveFeedLayout(layout) {
+    return writeJSON(FEED_LAYOUT_KEY, layout);
 }
 
 // Names of the groups hidden from the feed filters
